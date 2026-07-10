@@ -1,0 +1,8 @@
+streamlit>=1.38,<2.0
+pandas>=2.2
+numpy>=1.26
+matplotlib>=3.8
+plotly>=5.20
+networkx>=3.2
+statsmodels>=0.14
+scikit-learn>=1.4
