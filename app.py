@@ -1,10 +1,12 @@
 import streamlit as st
 import utils
 from beneficiary import build_country_scenario as continuous_build_country_scenario
-from utils import inject_css, COUNTRY_PROFILES
+from theme import inject_css as theme_inject_css
+from utils import COUNTRY_PROFILES
 from live_data import refresh_profiles, live_timestamp
 
 utils.build_country_scenario = continuous_build_country_scenario
+utils.inject_css = theme_inject_css
 
 st.set_page_config(page_title="TradeWar AI Simulator", page_icon="🌏", layout="wide", initial_sidebar_state="expanded")
 
