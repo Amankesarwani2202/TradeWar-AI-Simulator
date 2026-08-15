@@ -81,8 +81,12 @@ def _vulnerability(metrics):
 
 
 def build_network_figure(graph, metrics, title):
+    """Create a stable interactive network that remains visible in both themes."""
     colors = theme_colors()
     background, text, border = colors["background"], colors["text"], colors["border"]
+
+    # Keep the layout independent of trade volume so high-volume hubs cannot
+    # collapse the graph into one unreadable cluster.
     positions = nx.spring_layout(graph, seed=42, k=3.0, iterations=300, weight=None)
     metric_map = metrics.set_index("country")
     pageranks = metrics["pagerank"]
@@ -133,9 +137,15 @@ def build_network_figure(graph, metrics, title):
     fig = go.Figure([edge_trace, node_trace])
     fig.update_layout(
         title=dict(text=title, font=dict(color=text, size=22)),
-        height=560, margin=dict(l=20, r=20, t=70, b=20), hovermode="closest",
-        showlegend=False, paper_bgcolor=background, plot_bgcolor=background,
+        height=520,
+        margin=dict(l=20, r=20, t=70, b=20),
+        hovermode="closest",
+        showlegend=False,
+        paper_bgcolor=background,
+        plot_bgcolor=background,
         font=dict(color=text),
+        autosize=True,
+        uirevision="trade-network",
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
     )
@@ -153,7 +163,11 @@ def render_network_tab(*args):
 
     graph, metrics, vulnerability = build_scenario_trade_network(country, category, tariff_change_pct, target_partner)
     st.caption("Illustrative category-weighted trade network. Tariff shocks alter the targeted route and alternative suppliers; values are model outputs, not observed bilateral trade statistics.")
-    st.plotly_chart(build_network_figure(graph, metrics, f"{category} network — {country} ({tariff_change_pct:+.0f}%)"), use_container_width=True)
+    st.plotly_chart(
+        build_network_figure(graph, metrics, f"{category} network — {country} ({tariff_change_pct:+.0f}%)"),
+        use_container_width=True,
+        config={"displaylogo": False, "responsive": True},
+    )
     st.markdown("#### Scenario-adjusted trade network metrics")
     st.dataframe(metrics[["country", "pagerank", "import_dependency", "export_reach", "bridge_score", "import_value_bn", "export_value_bn"]], use_container_width=True, hide_index=True)
     st.markdown("#### Scenario-adjusted vulnerability")
