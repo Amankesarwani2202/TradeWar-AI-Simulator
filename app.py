@@ -4,9 +4,6 @@ from beneficiary import build_country_scenario as continuous_build_country_scena
 from utils import inject_css, COUNTRY_PROFILES
 from live_data import refresh_profiles, live_timestamp
 
-# Pages import build_country_scenario from utils. Replace that implementation at
-# startup so the existing UI uses the new continuous beneficiary model without
-# duplicating the scenario page.
 utils.build_country_scenario = continuous_build_country_scenario
 
 st.set_page_config(page_title="TradeWar AI Simulator", page_icon="🌏", layout="wide", initial_sidebar_state="expanded")
@@ -36,7 +33,7 @@ def home():
         with col:
             st.markdown(f'<div style="padding:1.2rem;border:1px solid var(--st-border-color);border-radius:.6rem;min-height:150px"><div style="font-size:1.4rem">{icon}</div><b>{title}</b><p style="font-size:.82rem;line-height:1.5">{desc}</p></div>', unsafe_allow_html=True)
             st.page_link(page, label="Open →", use_container_width=True)
-    st.info("**Data note:** trade-flow baselines remain synthetic for reproducible policy experiments. Macro/demographic data use public APIs and market prices use Yahoo Finance. External data can fail temporarily, so safe fallbacks are retained.")
+    st.info("**Data note:** trade-flow baselines remain synthetic for reproducible policy experiments. Macro/demographic data use public APIs and market prices use exchange/provider data. External data can fail temporarily; affected metrics are marked unavailable or use the documented baseline fallback.")
 
 
 pg = st.navigation({"": [st.Page(home, title="Home", icon="🏠", default=True)], "Simulator": [
