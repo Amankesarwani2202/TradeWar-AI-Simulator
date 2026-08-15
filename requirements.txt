@@ -8,3 +8,4 @@ statsmodels>=0.14
 scikit-learn>=1.4
 yfinance>=0.2.32
 requests>=2.31
+stocksurferbd>=1.0.0
