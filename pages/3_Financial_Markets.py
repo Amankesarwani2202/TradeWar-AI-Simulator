@@ -1,26 +1,26 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from utils import COUNTRIES, COUNTRY_PROFILES, inject_css
+from utils import COUNTRY_PROFILES, inject_css
 from market_data import MARKETS, download_history, summarize, live_timestamp
 
 inject_css()
 st.title("💹 Financial Markets")
 st.caption("Live observed market data is kept separate from modelled trade-policy scenarios.")
-st.caption(f"Market refresh: {live_timestamp()} · Source: Yahoo Finance via yfinance; availability depends on the instrument/provider.")
+st.caption(f"Market refresh: {live_timestamp()} · Yahoo Finance is used for supported markets; Bangladesh DSE data uses the DSE adapter. Availability can vary by exchange/provider.")
 
 country = st.sidebar.selectbox("Country / market", list(MARKETS), key="financial_country")
 options = MARKETS[country]
 labels = {f"{name} ({ticker})": (name, ticker, kind) for name, ticker, kind in options}
 selected = st.sidebar.multiselect("Markets to compare", list(labels), default=list(labels)[:2], key="financial_markets")
-period = st.sidebar.selectbox("History", ["1mo","3mo","6mo","1y","2y","5y"], index=3, key="financial_period")
+period = st.sidebar.selectbox("History", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=3, key="financial_period")
 
 rows = []
 for label in selected:
     name, ticker, kind = labels[label]
     result = summarize(ticker, name)
     if result:
-        rows.append({"Market": name, "Ticker": ticker, "Type": kind, "Latest": round(result["latest"],2), "Daily %": round(result["daily_pct"],2), "1Y %": round(result["period_pct"],2), "Volume": result["volume"]})
+        rows.append({"Market": name, "Ticker": ticker, "Type": kind, "Latest": round(result["latest"], 2), "Daily %": round(result["daily_pct"], 2), "1Y %": round(result["period_pct"], 2), "Volume": result["volume"]})
     else:
         st.warning(f"No live data returned for {name} ({ticker}).")
 
@@ -55,15 +55,14 @@ if search.strip():
             close = pd.to_numeric(data["Close"], errors="coerce").dropna()
             if not close.empty:
                 latest = float(close.iloc[-1]); previous = float(close.iloc[-2]) if len(close) > 1 else latest
-                a,b,c = st.columns(3)
+                a, b, c = st.columns(3)
                 a.metric("Latest", f"{latest:,.2f}")
-                b.metric("Daily change", f"{(latest/previous-1)*100:+.2f}%")
-                c.metric("Period change", f"{(latest/float(close.iloc[0])-1)*100:+.2f}%")
+                b.metric("Daily change", f"{(latest / previous - 1) * 100:+.2f}%")
+                c.metric("Period change", f"{(latest / float(close.iloc[0]) - 1) * 100:+.2f}%")
                 st.line_chart(close, use_container_width=True)
 
 st.divider()
 st.subheader("📈 Live market vs. policy scenario")
-profile = COUNTRY_PROFILES.get(country, {})
 scenario_ticker = options[0][1] if options else ""
 live = summarize(scenario_ticker, options[0][0] if options else country)
 if live:
