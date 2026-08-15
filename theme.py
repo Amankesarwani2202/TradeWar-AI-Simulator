@@ -11,59 +11,43 @@ def inject_css():
         h2 { font-weight: 600; }
 
         /*
-         * The app supports both Streamlit light and dark themes. A number of
-         * pages still contain inline colors from the original light design.
-         * Streamlit exposes the active theme through --st-* CSS variables,
-         * allowing these legacy elements to follow the selected theme.
+         * Theme rule: custom HTML cards are used throughout the app and many
+         * of them were authored with legacy light-mode colors. Streamlit can
+         * normalize inline CSS values in the rendered DOM (for example,
+         * #f8fafc -> rgb(...)), so matching one exact color string is not
+         * reliable. Any custom markdown card that explicitly sets a
+         * background therefore follows the active Streamlit theme instead.
+         * Native Streamlit alerts/widgets are intentionally not included.
          */
-
-        /* Neutral light surfaces -> active theme surfaces. */
-        [style*="background:#f8fafc"],
-        [style*="background: #f8fafc"],
-        [style*="background:#F8FAFC"],
-        [style*="background: #F8FAFC"] {
+        [data-testid="stMarkdownContainer"] div[style*="background"],
+        [data-testid="stMarkdownContainer"] div[style*="background-color"] {
             background: var(--st-secondary-background-color) !important;
+            color: var(--st-text-color) !important;
         }
 
-        [style*="background:#ffffff"],
-        [style*="background: #ffffff"],
-        [style*="background:#FFFFFF"],
-        [style*="background: #FFFFFF"],
-        [style*="background:white"],
-        [style*="background: white"] {
-            background: var(--st-background-color) !important;
+        /* Make text inside legacy cards follow the active theme too. This is
+           needed because many cards set text colors directly on <p>/<span>. */
+        [data-testid="stMarkdownContainer"] div[style*="background"] p,
+        [data-testid="stMarkdownContainer"] div[style*="background"] span,
+        [data-testid="stMarkdownContainer"] div[style*="background"] strong,
+        [data-testid="stMarkdownContainer"] div[style*="background"] b,
+        [data-testid="stMarkdownContainer"] div[style*="background"] em,
+        [data-testid="stMarkdownContainer"] div[style*="background-color"] p,
+        [data-testid="stMarkdownContainer"] div[style*="background-color"] span,
+        [data-testid="stMarkdownContainer"] div[style*="background-color"] strong,
+        [data-testid="stMarkdownContainer"] div[style*="background-color"] b,
+        [data-testid="stMarkdownContainer"] div[style*="background-color"] em {
+            color: var(--st-text-color) !important;
         }
 
-        /* Semantic status surfaces use Streamlit's theme-aware palette. */
-        [style*="background:#dcfce7"],
-        [style*="background: #dcfce7"],
-        [style*="background:#DCFCE7"],
-        [style*="background: #DCFCE7"] {
-            background: var(--st-green-background-color) !important;
+        /* Preserve semantic accent borders while making neutral borders theme-aware. */
+        [data-testid="stMarkdownContainer"] div[style*="background"] {
+            border-top-color: var(--st-border-color) !important;
+            border-right-color: var(--st-border-color) !important;
+            border-bottom-color: var(--st-border-color) !important;
         }
 
-        [style*="background:#fef3c7"],
-        [style*="background: #fef3c7"],
-        [style*="background:#FEF3C7"],
-        [style*="background: #FEF3C7"] {
-            background: var(--st-yellow-background-color) !important;
-        }
-
-        [style*="background:#fee2e2"],
-        [style*="background: #fee2e2"],
-        [style*="background:#FEE2E2"],
-        [style*="background: #FEE2E2"] {
-            background: var(--st-red-background-color) !important;
-        }
-
-        [style*="background:#eff6ff"],
-        [style*="background: #eff6ff"],
-        [style*="background:#EFF6FF"],
-        [style*="background: #EFF6FF"] {
-            background: var(--st-blue-background-color) !important;
-        }
-
-        /* Legacy neutral text -> active theme text hierarchy. */
+        /* Legacy light text used outside cards. */
         [style*="color:#0f172a"],
         [style*="color: #0f172a"],
         [style*="color:#0F172A"],
@@ -94,7 +78,21 @@ def inject_css():
             color: var(--st-gray-text-color) !important;
         }
 
-        /* Legacy borders -> active theme borders. */
+        /* Neutral inline surfaces -> active theme surfaces even when the
+           browser normalizes the inline color value. */
+        [style*="background:#f8fafc"],
+        [style*="background: #f8fafc"],
+        [style*="background:#F8FAFC"],
+        [style*="background: #F8FAFC"],
+        [style*="background:#ffffff"],
+        [style*="background: #ffffff"],
+        [style*="background:#FFFFFF"],
+        [style*="background: #FFFFFF"],
+        [style*="background:white"],
+        [style*="background: white"] {
+            background: var(--st-secondary-background-color) !important;
+        }
+
         [style*="border:#e2e8f0"],
         [style*="border: #e2e8f0"],
         [style*="border:1px solid #e2e8f0"],
@@ -104,23 +102,11 @@ def inject_css():
             border-color: var(--st-border-color) !important;
         }
 
-        [style*="border-left:3px solid #94a3b8"],
-        [style*="border-left: 3px solid #94a3b8"],
-        [style*="border-left:3px solid #94A3B8"],
-        [style*="border-left: 3px solid #94A3B8"] {
-            border-left-color: var(--st-gray-color) !important;
-        }
-
-        [data-testid="stSidebar"] h2[style*="#1f2937"],
-        [data-testid="stSidebar"] h2[style*="#1F2937"] {
-            color: var(--st-text-color) !important;
-        }
-
         [data-testid="stAlert"] { color: var(--st-text-color); }
         [data-testid="stAlert"] p { color: inherit !important; }
 
-        /* Plotly charts can contain a hard-coded white template. Normalize
-           their canvas, grid, and axis text to the active Streamlit theme. */
+        /* Plotly charts: keep canvas, grid, and labels aligned with the
+           currently selected Streamlit theme. */
         .js-plotly-plot .plotly,
         .js-plotly-plot .plotly .main-svg,
         .js-plotly-plot .plotly .bg {
