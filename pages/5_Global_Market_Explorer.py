@@ -1,7 +1,9 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 from market_data import MARKETS, COMMON_ASSETS, download_history, summarize, live_timestamp
+from theme import inject_css
 
+inject_css()
 st.set_page_config(page_title="Global Market Explorer", page_icon="🌐", layout="wide")
 
 st.title("🌐 Global Financial Market Explorer")
