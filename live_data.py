@@ -1,4 +1,5 @@
 """Live macroeconomic, demographic and FX data adapters."""
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import requests
 import streamlit as st
@@ -9,7 +10,7 @@ INDICATORS={"population_mn":"SP.POP.TOTL","urbanization_pct":"SP.URB.TOTL.IN.ZS"
 @st.cache_data(ttl=3600,show_spinner=False)
 def _world_bank_indicator(country_code,indicator):
     try:
-        r=requests.get(f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator}",params={"format":"json","per_page":10},timeout=8);r.raise_for_status();payload=r.json()
+        r=requests.get(f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator}",params={"format":"json","per_page":10},timeout=5);r.raise_for_status();payload=r.json()
         for row in payload[1] if len(payload)>1 else []:
             if row.get("value") is not None:return float(row["value"]),int(row["date"])
     except Exception:pass
@@ -19,7 +20,7 @@ def _world_bank_indicator(country_code,indicator):
 def get_live_fx_rate(base_currency,quote_currency="USD"):
     if base_currency==quote_currency:return 1.0
     try:
-        r=requests.get(f"https://api.frankfurter.app/latest?from={base_currency}&to={quote_currency}",timeout=8);r.raise_for_status();return float(r.json()["rates"][quote_currency])
+        r=requests.get(f"https://api.frankfurter.app/latest?from={base_currency}&to={quote_currency}",timeout=5);r.raise_for_status();return float(r.json()["rates"][quote_currency])
     except Exception:return None
 
 @st.cache_data(ttl=3600,show_spinner=False)
@@ -51,7 +52,14 @@ def get_live_country_profile(country,fallback):
 
 def refresh_profiles(profiles):
     refreshed,years={},{}
-    for country,fallback in profiles.items():refreshed[country],years[country]=get_live_country_profile(country,fallback)
+    # API calls are independent. Parallelism keeps first-load latency bounded
+    # while each endpoint remains cached for subsequent Streamlit reruns.
+    with ThreadPoolExecutor(max_workers=min(8,len(profiles))) as executor:
+        futures={executor.submit(get_live_country_profile,country,fallback):country for country,fallback in profiles.items()}
+        for future in as_completed(futures):
+            country=futures[future]
+            try:refreshed[country],years[country]=future.result()
+            except Exception:refreshed[country],years[country]=dict(profiles[country]),None
     return refreshed,years
 
 def live_timestamp():return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
