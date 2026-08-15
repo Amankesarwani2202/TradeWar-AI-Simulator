@@ -6,9 +6,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from utils import ALTERNATIVE_SUPPLIERS, COUNTRIES, TRADE_ELASTICITY, TRADE_FLOWS
+from theme import apply_plotly_theme, theme_colors
 
-# Illustrative route weights make the selected product category matter in the
-# network. These are teaching-model weights, not observed bilateral statistics.
 CATEGORY_ROUTE_MULTIPLIERS = {
     "Electronics": {"China": 1.20, "Taiwan": 1.35, "South Korea": 1.25, "Japan": 1.10, "Vietnam": 1.15, "India": 0.85},
     "Semiconductors": {"Taiwan": 1.45, "South Korea": 1.35, "Japan": 1.20, "China": 1.05, "US": 1.10, "India": 0.75},
@@ -100,20 +99,17 @@ def _vulnerability(metrics):
 
 
 def _theme_colors():
-    try:
-        dark = st.context.theme.type == "dark"
-    except Exception:
-        dark = st.get_option("theme.base") == "dark"
-    if dark:
-        return "#0b1220", "#e5e7eb", "#334155", "rgba(148,163,184,0.45)"
-    return "#ffffff", "#111827", "#e2e8f0", "rgba(100,116,139,0.40)"
+    colors = theme_colors()
+    return colors["background"], colors["text"], colors["border"], (
+        "rgba(148,163,184,0.45)" if colors["background"] != "#ffffff" else "rgba(100,116,139,0.40)"
+    )
 
 
 def build_network_figure(graph, metrics, title):
-    """Create a readable scenario-sensitive network with bounded node sizes."""
+    """Create a readable, scenario-sensitive network with stable Plotly settings."""
     background, text, grid, edge_color = _theme_colors()
-    # Ignore edge weights for layout so high-volume hubs do not collapse the graph.
-    positions = nx.spring_layout(graph, seed=42, k=2.4, iterations=220, weight=None)
+    # Ignore edge weights for layout so large hubs do not collapse the graph.
+    positions = nx.spring_layout(graph, seed=42, k=3.0, iterations=300, weight=None)
     metric_map = metrics.set_index("country")
     pageranks = metrics["pagerank"]
     p_min, p_max = float(pageranks.min()), float(pageranks.max())
@@ -127,13 +123,17 @@ def build_network_figure(graph, metrics, title):
         edge_y.extend([y0, y1, None])
 
     edge_trace = go.Scatter(
-        x=edge_x, y=edge_y, mode="lines",
-        line=dict(width=1.2, color=edge_color), hoverinfo="none", showlegend=False,
+        x=edge_x,
+        y=edge_y,
+        mode="lines",
+        line=dict(width=1.1, color=edge_color),
+        hoverinfo="none",
+        showlegend=False,
     )
 
     node_x = [positions[c][0] for c in COUNTRIES]
     node_y = [positions[c][1] for c in COUNTRIES]
-    sizes = [20 + 28 * ((metric_map.loc[c, "pagerank"] - p_min) / span) for c in COUNTRIES]
+    sizes = [18 + 24 * ((metric_map.loc[c, "pagerank"] - p_min) / span) for c in COUNTRIES]
     hover = [
         f"<b>{c}</b><br>PageRank: {metric_map.loc[c, 'pagerank']:.4f}"
         f"<br>Import dependency: {metric_map.loc[c, 'import_dependency']:.2%}"
@@ -144,14 +144,25 @@ def build_network_figure(graph, metrics, title):
     ]
 
     node_trace = go.Scatter(
-        x=node_x, y=node_y, mode="markers+text", text=COUNTRIES,
-        textposition="middle center", textfont=dict(size=11, color=text),
-        hovertext=hover, hoverinfo="text", showlegend=False,
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
+        text=COUNTRIES,
+        textposition="middle center",
+        textfont=dict(size=11, color=text),
+        hovertext=hover,
+        hoverinfo="text",
+        showlegend=False,
         marker=dict(
             size=sizes,
             color=[metric_map.loc[c, "pagerank"] for c in COUNTRIES],
-            colorscale="Viridis", showscale=True,
-            colorbar=dict(title="PageRank", tickfont=dict(color=text), titlefont=dict(color=text)),
+            colorscale="Viridis",
+            showscale=True,
+            colorbar=dict(
+                title=dict(text="PageRank", font=dict(color=text)),
+                tickfont=dict(color=text),
+                outlinecolor=grid,
+            ),
             line=dict(width=1, color=edge_color),
         ),
     )
@@ -159,16 +170,21 @@ def build_network_figure(graph, metrics, title):
     fig = go.Figure([edge_trace, node_trace])
     fig.update_layout(
         title=dict(text=title, font=dict(color=text, size=22)),
-        height=560, margin=dict(l=20, r=20, t=70, b=20), hovermode="closest",
-        showlegend=False, paper_bgcolor=background, plot_bgcolor=background,
+        height=560,
+        margin=dict(l=20, r=20, t=70, b=20),
+        hovermode="closest",
+        showlegend=False,
+        paper_bgcolor=background,
+        plot_bgcolor=background,
         font=dict(color=text),
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
     )
-    return fig
+    return apply_plotly_theme(fig)
 
 
-def render_network_tab(country, category, tariff_change_pct, target_partner):
+def render_network_tab(country, category, tariff_change_pct, target_partner, *args):
+    """Render a scenario-adjusted network; extra legacy args are ignored."""
     graph, metrics, vulnerability = build_scenario_trade_network(country, category, tariff_change_pct, target_partner)
     st.caption("Illustrative category-weighted trade network. Tariff shocks alter the targeted route and alternative suppliers; values are model outputs, not observed bilateral trade statistics.")
     st.plotly_chart(build_network_figure(graph, metrics, f"{category} network — {country} ({tariff_change_pct:+.0f}%)"), use_container_width=True)
