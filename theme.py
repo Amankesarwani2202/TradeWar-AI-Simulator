@@ -23,7 +23,6 @@ def apply_plotly_theme(fig):
     dark = current_theme_type() == "dark"
     background = "#0b1220" if dark else "#ffffff"
     text = "#e5e7eb" if dark else "#111827"
-    muted = "#94a3b8" if dark else "#64748b"
     grid = "#334155" if dark else "#e2e8f0"
 
     fig.update_layout(
@@ -39,7 +38,6 @@ def apply_plotly_theme(fig):
             bordercolor=grid,
         ),
     )
-
     fig.update_xaxes(
         title_font=dict(color=text),
         tickfont=dict(color=text),
@@ -57,30 +55,25 @@ def apply_plotly_theme(fig):
         color=text,
     )
 
-    # Explicitly style colorbars. Plotly colorbars are independent of the
-    # figure font and otherwise frequently retain black text in dark mode.
+    # Colorbars need their own font settings; figure-level font does not
+    # reliably propagate to their title/ticks in Plotly.
     for trace in fig.data:
-        if hasattr(trace, "marker") and trace.marker is not None:
-            try:
-                if trace.marker.colorbar is not None:
-                    trace.marker.colorbar.title = dict(
-                        text=(trace.marker.colorbar.title.text if trace.marker.colorbar.title else ""),
-                        font=dict(color=text),
-                    )
-                    trace.marker.colorbar.tickfont = dict(color=text)
-                    trace.marker.colorbar.outlinecolor = grid
-            except Exception:
-                pass
-        if hasattr(trace, "colorbar") and trace.colorbar is not None:
-            try:
-                trace.colorbar.title = dict(
-                    text=(trace.colorbar.title.text if trace.colorbar.title else ""),
-                    font=dict(color=text),
-                )
-                trace.colorbar.tickfont = dict(color=text)
-                trace.colorbar.outlinecolor = grid
-            except Exception:
-                pass
+        try:
+            colorbar = trace.marker.colorbar if trace.marker is not None else None
+            if colorbar is not None:
+                colorbar.title = dict(text=colorbar.title.text if colorbar.title else "", font=dict(color=text))
+                colorbar.tickfont = dict(color=text)
+                colorbar.outlinecolor = grid
+        except Exception:
+            pass
+        try:
+            colorbar = trace.colorbar
+            if colorbar is not None:
+                colorbar.title = dict(text=colorbar.title.text if colorbar.title else "", font=dict(color=text))
+                colorbar.tickfont = dict(color=text)
+                colorbar.outlinecolor = grid
+        except Exception:
+            pass
 
     return fig
 
@@ -95,8 +88,8 @@ def inject_css():
 
         [data-testid="stMarkdownContainer"] div[style*="background"],
         [data-testid="stMarkdownContainer"] div[style*="background-color"] {
-            background: var(--st-secondary-background-color) !important;
-            color: var(--st-text-color) !important;
+            background: var(--secondary-background-color) !important;
+            color: var(--text-color) !important;
         }
         [data-testid="stMarkdownContainer"] div[style*="background"] p,
         [data-testid="stMarkdownContainer"] div[style*="background"] span,
@@ -108,7 +101,7 @@ def inject_css():
         [data-testid="stMarkdownContainer"] div[style*="background-color"] strong,
         [data-testid="stMarkdownContainer"] div[style*="background-color"] b,
         [data-testid="stMarkdownContainer"] div[style*="background-color"] em {
-            color: var(--st-text-color) !important;
+            color: var(--text-color) !important;
         }
 
         [style*="color:#0f172a"], [style*="color: #0f172a"],
@@ -123,7 +116,7 @@ def inject_css():
         [style*="color:#6b7280"], [style*="color: #6b7280"],
         [style*="color:#6B7280"], [style*="color: #6B7280"],
         [style*="color:#666"], [style*="color: #666"] {
-            color: var(--st-text-color) !important;
+            color: var(--text-color) !important;
         }
 
         [style*="background:#f8fafc"], [style*="background: #f8fafc"],
@@ -131,20 +124,20 @@ def inject_css():
         [style*="background:#ffffff"], [style*="background: #ffffff"],
         [style*="background:#FFFFFF"], [style*="background: #FFFFFF"],
         [style*="background:white"], [style*="background: white"] {
-            background: var(--st-secondary-background-color) !important;
+            background: var(--secondary-background-color) !important;
         }
 
         [style*="border:#e2e8f0"], [style*="border: #e2e8f0"],
         [style*="border:1px solid #e2e8f0"], [style*="border: 1px solid #e2e8f0"],
         [style*="border:1px solid #E2E8F0"], [style*="border: 1px solid #E2E8F0"] {
-            border-color: var(--st-border-color) !important;
+            border-color: var(--border-color) !important;
         }
 
-        [data-testid="stAlert"] { color: var(--st-text-color); }
+        [data-testid="stAlert"] { color: var(--text-color); }
         [data-testid="stAlert"] p { color: inherit !important; }
 
-        /* Plotly SVG text is independent of Streamlit's CSS. These rules are
-           a defensive fallback for figures that contain hard-coded text. */
+        /* Plotly SVGs do not inherit Streamlit text color consistently.
+           Use the actual Streamlit CSS variables instead of hard-coded black. */
         .js-plotly-plot .plotly svg text,
         .js-plotly-plot .plotly .gtitle,
         .js-plotly-plot .plotly .xtitle,
@@ -154,13 +147,13 @@ def inject_css():
         .js-plotly-plot .plotly .legendtext,
         .js-plotly-plot .plotly .cbtitle,
         .js-plotly-plot .plotly .cbaxis text {
-            fill: var(--st-text-color) !important;
+            fill: var(--text-color) !important;
         }
         .js-plotly-plot .plotly .gridlayer path,
         .js-plotly-plot .plotly .zerolinelayer path,
         .js-plotly-plot .plotly .xaxislayer-above path,
         .js-plotly-plot .plotly .yaxislayer-above path {
-            stroke: var(--st-border-color) !important;
+            stroke: var(--border-color) !important;
         }
         </style>''',
         unsafe_allow_html=True,
