@@ -90,7 +90,9 @@ st.title("⚙️ Custom Scenario Simulator")
 st.markdown('<p style="font-size:1.05rem;color:#6b7280;margin-top:-.75rem;margin-bottom:1.5rem;">Model how tariff changes ripple through supply chains, forecasts, and trade networks — with step-by-step economic explanations</p>', unsafe_allow_html=True)
 tariff_direction_word = "increase" if tariff_change > 0 else "reduction" if tariff_change < 0 else "no change"
 _ctx_border = "#ef4444" if tariff_change > 0 else "#16a34a" if tariff_change < 0 else "#6b7280"
-st.markdown(f'<div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:.5rem;border:1px solid #e2e8f0;border-left:4px solid {_ctx_border};margin-bottom:1.5rem;"><p style="margin:0;font-size:.95rem;font-weight:600;color:#0f172a;">{abs(tariff_change)}% tariff {tariff_direction_word} &nbsp;·&nbsp; {country} → {target_partner} &nbsp;·&nbsp; {category}</p><p style="margin:.3rem 0 0;font-size:.82rem;color:#64748b;">{target_partner} {"raises" if tariff_change > 0 else "cuts" if tariff_change < 0 else "keeps"} tariffs on {country}'s {category} by {abs(tariff_change)}%. Trade elasticity applied across all 10 economies.</p></div>', unsafe_allow_html=True)
+raise_word = "raises" if tariff_change > 0 else "cuts" if tariff_change < 0 else "keeps"
+context_html = f'<div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:.5rem;border:1px solid #e2e8f0;border-left:4px solid {_ctx_border};margin-bottom:1.5rem;"><p style="margin:0;font-size:.95rem;font-weight:600;color:#0f172a;">{abs(tariff_change)}% tariff {tariff_direction_word} &nbsp;·&nbsp; {country} → {target_partner} &nbsp;·&nbsp; {category}</p><p style="margin:.3rem 0 0;font-size:.82rem;color:#64748b;">{target_partner} {raise_word} tariffs on {country}\'s {category} by {abs(tariff_change)}%. Trade elasticity applied across all 10 economies.</p></div>'
+st.markdown(context_html, unsafe_allow_html=True)
 
 scenario = build_country_scenario(df, country, category, tariff_change, target_partner, projection_horizon=forecast_steps)
 scenario = apply_policy_shock_to_scenario(scenario, historical_event, shock_pct)
@@ -122,10 +124,7 @@ with col_ben1:
     else:
         title = "📊 Limited beneficiary effect"
         label = "The model detects a beneficiary effect, but it is small at this tariff magnitude."
-    if beneficiaries:
-        body = ", ".join(beneficiaries)
-    else:
-        body = "No country crosses the significance floor for this scenario."
+    body = ", ".join(beneficiaries) if beneficiaries else "No country crosses the significance floor for this scenario."
     st.info(f"**{title}**\n\n**{body}**\n\n{label}")
 
 with col_ben2:
@@ -153,7 +152,10 @@ with network_tab:
 
 st.markdown("---")
 with st.expander("📚 How this simulator works", expanded=False):
-    elasticity_val = TRADE_ELASTICITY.get(category, -0.7)
+    elasticity_val = scenario.get("elasticity", None)
+    if elasticity_val is None:
+        from beneficiary import TRADE_ELASTICITY
+        elasticity_val = TRADE_ELASTICITY.get(category, -0.7)
     st.markdown(f"""
     **Core formula**: Export change (%) = Trade elasticity × Tariff change (%)
 
