@@ -13,7 +13,7 @@ def inject_css():
     [style*="#f8fafc"], [style*="#F8FAFC"] {
         background: var(--secondary-background-color) !important;
         color: var(--text-color) !important;
-        border-color: var(--border-color) !important;
+        border-color: var(--st-border-color, var(--border-color)) !important;
     }
     [style*="#eff6ff"], [style*="#EFF6FF"] {
         background: color-mix(in srgb, var(--primary-color) 12%, var(--secondary-background-color)) !important;
@@ -35,14 +35,13 @@ def inject_css():
     /* Inline dark text from the light theme must not become unreadable in dark mode. */
     [style*="#0f172a"], [style*="#0F172A"],
     [style*="#1f2937"], [style*="#1F2937"],
-    [style*="#475569"], [style*="#475569"],
-    [style*="#64748b"], [style*="#64748B"],
+    [style*="#475569"], [style*="#64748b"], [style*="#64748B"],
     [style*="#666"] {
         color: var(--text-color) !important;
     }
 
     [style*="#e2e8f0"], [style*="#E2E8F0"] {
-        border-color: var(--border-color) !important;
+        border-color: var(--st-border-color, var(--border-color)) !important;
     }
 
     [data-testid="stAlert"] { color: var(--text-color); }
