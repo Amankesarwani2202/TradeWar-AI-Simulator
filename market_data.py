@@ -1,10 +1,8 @@
 """Live market data and instrument discovery.
 
-Yahoo Finance is used where it provides the requested instrument. Bangladesh
-DSEX and DSE equities use the DSE-specific stocksurferbd adapter because
-Yahoo Finance does not expose reliable DSE quotes. South Africa uses the
-Yahoo-listed Satrix 40 ETF as an explicitly labelled FTSE/JSE Top 40 proxy
-because Yahoo does not provide the JTOPI index itself.
+Yahoo Finance is used for supported global markets. Bangladesh DSE data uses
+bdshare, which provides DSEX and DSE equity quotes without conflicting with
+Yahoo Finance dependencies.
 """
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
@@ -17,10 +15,11 @@ except Exception:
     yf = None
 
 try:
-    from stocksurferbd import IndexData, PriceData
+    from bdshare import get_dsex_data, get_historical_data, get_current_trade_data
 except Exception:
-    IndexData = None
-    PriceData = None
+    get_dsex_data = None
+    get_historical_data = None
+    get_current_trade_data = None
 
 MARKETS = {
     "India": [("NIFTY 50", "^NSEI", "Index"), ("NIFTY Bank", "^NSEBANK", "Index"), ("BSE Sensex", "^BSESN", "Index"), ("NIFTY IT", "^CNXIT", "Index"), ("NIFTY Midcap 100", "NIFTY_MIDCAP_100.NS", "Index"), ("NIFTY Smallcap 100", "^CNXSC", "Index"), ("NIFTY Next 50", "^NSMIDCP", "Index")],
@@ -70,60 +69,58 @@ def _normalize_history(data: pd.DataFrame) -> pd.DataFrame:
     data = data.copy()
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = data.columns.get_level_values(0)
-    return data.dropna(how="all")
+    if "Close" not in data.columns:
+        for candidate in ("close", "CLOSE", "ltp", "LTP"):
+            if candidate in data.columns:
+                data["Close"] = data[candidate]
+                break
+    if "Close" not in data.columns:
+        return _empty_history()
+    for col in ("Open", "High", "Low"):
+        if col not in data.columns:
+            data[col] = data["Close"]
+    if "Volume" not in data.columns:
+        data["Volume"] = pd.NA
+    data["Close"] = pd.to_numeric(data["Close"], errors="coerce")
+    return data.dropna(subset=["Close"]).sort_index()
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _download_dsex(period: str) -> pd.DataFrame:
-    if IndexData is None:
+    if get_dsex_data is None:
         return _empty_history()
     try:
-        end = datetime.now(timezone.utc).date()
-        start = end - timedelta(days=_period_days(period))
-        data = IndexData().get_index_history_df(market="DSE", start_date=str(start), end_date=str(end))
-        if data is None or data.empty or "DSEX" not in data.columns:
+        raw = get_dsex_data("DSEX")
+        if raw is None or raw.empty:
             return _empty_history()
-        frame = data.copy()
-        date_col = next((c for c in frame.columns if str(c).upper() in {"DATE", "DATETIME"}), None)
+        data = raw.copy()
+        # bdshare versions expose the index value under dsex/close/ltp depending on release.
+        close_col = next((c for c in data.columns if str(c).lower() in {"dsex", "close", "ltp", "index"}), None)
+        if close_col is None:
+            numeric = data.select_dtypes(include="number").columns
+            close_col = numeric[0] if len(numeric) else None
+        if close_col is None:
+            return _empty_history()
+        data["Close"] = pd.to_numeric(data[close_col], errors="coerce")
+        date_col = next((c for c in data.columns if str(c).lower() in {"date", "datetime"}), None)
         if date_col:
-            frame.index = pd.to_datetime(frame[date_col], errors="coerce")
-        frame["Close"] = pd.to_numeric(frame["DSEX"], errors="coerce")
-        frame = frame.dropna(subset=["Close"])
-        frame["Open"] = frame["Close"]
-        frame["High"] = frame["Close"]
-        frame["Low"] = frame["Close"]
-        frame["Volume"] = pd.to_numeric(frame.get("TOTAL_VOLUME"), errors="coerce") if "TOTAL_VOLUME" in frame else pd.NA
-        return frame[["Open", "High", "Low", "Close", "Volume"]].sort_index()
+            data.index = pd.to_datetime(data[date_col], errors="coerce")
+        data["Open"] = data["Close"]; data["High"] = data["Close"]; data["Low"] = data["Close"]
+        data["Volume"] = pd.NA
+        return data[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"]).sort_index()
     except Exception:
         return _empty_history()
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _download_dse_equity(ticker: str, period: str) -> pd.DataFrame:
-    if PriceData is None:
+    if get_historical_data is None:
         return _empty_history()
     try:
         end = datetime.now(timezone.utc).date()
         start = end - timedelta(days=_period_days(period))
-        data = PriceData().get_price_history_df(ticker, market="DSE", start_date=str(start), end_date=str(end))
-        if data is None or data.empty:
-            return _empty_history()
-        data = data.copy()
-        rename = {"OPENP": "Open", "HIGH": "High", "LOW": "Low", "CLOSEP": "Close", "LTP": "Close", "VOLUME": "Volume"}
-        data = data.rename(columns=rename)
-        date_col = next((c for c in data.columns if str(c).upper() in {"DATE", "DATETIME"}), None)
-        if date_col:
-            data.index = pd.to_datetime(data[date_col], errors="coerce")
-        required = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in data.columns]
-        if "Close" not in data.columns:
-            return _empty_history()
-        for col in ["Open", "High", "Low"]:
-            if col not in data.columns:
-                data[col] = data["Close"]
-        if "Volume" not in data.columns:
-            data["Volume"] = pd.NA
-        data["Close"] = pd.to_numeric(data["Close"], errors="coerce")
-        return data[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"]).sort_index()
+        data = get_historical_data(str(start), str(end), ticker)
+        return _normalize_history(data)
     except Exception:
         return _empty_history()
 
@@ -132,14 +129,16 @@ def _download_dse_equity(ticker: str, period: str) -> pd.DataFrame:
 def download_history(ticker: str, period: str = "1y") -> pd.DataFrame:
     if not ticker:
         return _empty_history()
-    if ticker.upper() == "DSEX":
+    symbol = ticker.strip()
+    if symbol.upper() == "DSEX":
         return _download_dsex(period)
-    if ticker.upper() in {"GP", "SQURPHARMA", "BRACBANK"}:
-        return _download_dse_equity(ticker, period)
+    if symbol.upper() in {"GP", "SQURPHARMA", "BRACBANK"}:
+        return _download_dse_equity(symbol, period)
     if yf is None:
         return _empty_history()
     try:
-        return _normalize_history(yf.download(ticker.strip(), period=period, progress=False, auto_adjust=True, threads=False))
+        data = yf.download(symbol, period=period, progress=False, auto_adjust=True, threads=False)
+        return _normalize_history(data)
     except Exception:
         return _empty_history()
 
@@ -151,9 +150,7 @@ def summarize(ticker: str, name: str = "") -> dict | None:
     close = pd.to_numeric(data["Close"], errors="coerce").dropna()
     if close.empty:
         return None
-    latest = float(close.iloc[-1])
-    previous = float(close.iloc[-2]) if len(close) > 1 else latest
-    first = float(close.iloc[0])
+    latest = float(close.iloc[-1]); previous = float(close.iloc[-2]) if len(close) > 1 else latest; first = float(close.iloc[0])
     volume = None
     if "Volume" in data:
         vol = pd.to_numeric(data["Volume"], errors="coerce").dropna()
@@ -162,16 +159,13 @@ def summarize(ticker: str, name: str = "") -> dict | None:
 
 
 def search_ticker(query: str, country: str | None = None) -> pd.DataFrame:
-    """Search Yahoo Finance symbols by name/ticker when yfinance exposes search."""
     if yf is None or not query.strip():
         return pd.DataFrame(columns=["name", "symbol", "exchange", "type"])
     try:
         result = yf.Search(query.strip()).quotes
     except Exception:
         return pd.DataFrame(columns=["name", "symbol", "exchange", "type"])
-    rows = []
-    for item in result or []:
-        rows.append({"name": item.get("shortname") or item.get("longname") or item.get("symbol", ""), "symbol": item.get("symbol", ""), "exchange": item.get("exchange", ""), "type": item.get("quoteType", "")})
+    rows = [{"name": item.get("shortname") or item.get("longname") or item.get("symbol", ""), "symbol": item.get("symbol", ""), "exchange": item.get("exchange", ""), "type": item.get("quoteType", "")} for item in (result or [])]
     return pd.DataFrame(rows).drop_duplicates(subset=["symbol"]) if rows else pd.DataFrame(columns=["name", "symbol", "exchange", "type"])
 
 
