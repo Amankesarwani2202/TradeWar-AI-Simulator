@@ -9,30 +9,11 @@ def inject_css():
     h1 { font-weight: 700; }
     h2 { font-weight: 600; }
 
-    /* Legacy cards use inline light-theme colours. Map them to Streamlit theme variables. */
-    [style*="#f8fafc"], [style*="#F8FAFC"] {
-        background: var(--secondary-background-color) !important;
-        color: var(--text-color) !important;
-        border-color: var(--border-color) !important;
-    }
-    [style*="#eff6ff"], [style*="#EFF6FF"] {
-        background: color-mix(in srgb, var(--primary-color) 12%, var(--secondary-background-color)) !important;
-        color: var(--text-color) !important;
-    }
-    [style*="#dcfce7"], [style*="#DCFCE7"] {
-        background: color-mix(in srgb, #22c55e 12%, var(--secondary-background-color)) !important;
-        color: var(--text-color) !important;
-    }
-    [style*="#fef3c7"], [style*="#FEF3C7"] {
-        background: color-mix(in srgb, #f59e0b 14%, var(--secondary-background-color)) !important;
-        color: var(--text-color) !important;
-    }
-    [style*="#fee2e2"], [style*="#FEE2E2"] {
-        background: color-mix(in srgb, #ef4444 12%, var(--secondary-background-color)) !important;
-        color: var(--text-color) !important;
-    }
+    /* Legacy cards: preserve their existing light colours, but fix only text/border contrast. */
+    [style*="#f8fafc"], [style*="#F8FAFC"] { border-color: var(--border-color) !important; }
+    [style*="#e2e8f0"], [style*="#E2E8F0"] { border-color: var(--border-color) !important; }
 
-    /* Inline dark text from the light theme must not become unreadable in dark mode. */
+    /* Existing inline text colours that are too dark for dark mode. */
     [style*="#0f172a"], [style*="#0F172A"],
     [style*="#1f2937"], [style*="#1F2937"],
     [style*="#475569"], [style*="#64748b"], [style*="#64748B"],
@@ -40,25 +21,25 @@ def inject_css():
         color: var(--text-color) !important;
     }
 
-    [style*="#e2e8f0"], [style*="#E2E8F0"] {
-        border-color: var(--border-color) !important;
+    /* Demographics-only text correction. Backgrounds are intentionally untouched
+       so the current light theme remains exactly as designed. */
+    [style*="#f8fafc"] p,
+    [style*="#f8fafc"] strong,
+    [style*="#f8fafc"] span,
+    [style*="#eff6ff"] p,
+    [style*="#eff6ff"] strong,
+    [style*="#dcfce7"] p,
+    [style*="#dcfce7"] strong,
+    [style*="#fef3c7"] p,
+    [style*="#fef3c7"] strong,
+    [style*="#fee2e2"] p,
+    [style*="#fee2e2"] strong {
+        color: var(--text-color) !important;
     }
+
+    /* Keep coloured status accents readable in both themes. */
+    [style*="#16a34a"] { color: #16a34a !important; }
 
     [data-testid="stAlert"] { color: var(--text-color); }
     [data-testid="stAlert"] p { color: inherit !important; }
-
-    /*
-       Scoped fix for legacy Demographics HTML blocks whose inline colours can
-       become unreadable in dark mode. We deliberately do not change their
-       backgrounds, spacing, borders, or the dependency-ratio card, so the
-       existing light theme remains visually unchanged.
-    */
-    .tw-theme-text,
-    .tw-theme-text strong {
-        color: var(--text-color) !important;
-    }
-    .tw-theme-muted {
-        color: var(--text-color) !important;
-        opacity: 0.78;
-    }
     </style>''', unsafe_allow_html=True)
