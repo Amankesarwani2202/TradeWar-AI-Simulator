@@ -1,66 +1,71 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
+from market_data import MARKETS, COMMON_ASSETS, download_history, summarize, live_timestamp
 
-st.set_page_config(page_title='Global Market Explorer', page_icon='🌐', layout='wide')
+st.set_page_config(page_title="Global Market Explorer", page_icon="🌐", layout="wide")
 
-MARKETS = {
-    'India': [('NIFTY 50','^NSEI'),('NIFTY Bank','^NSEBANK'),('BSE Sensex','^BSESN'),('NIFTY IT','^CNXIT'),('NIFTY Midcap 100','^CNXMC'),('NIFTY Smallcap 100','^CNXSC')],
-    'China': [('SSE Composite','000001.SS'),('CSI 300','000300.SS'),('Shenzhen Component','399001.SZ'),('Hang Seng China Enterprises','^HSCE')],
-    'US': [('S&P 500','^GSPC'),('Nasdaq 100','^NDX'),('Dow Jones','^DJI'),('Russell 2000','^RUT'),('VIX','^VIX')],
-    'Japan': [('Nikkei 225','^N225'),('TOPIX','^TOPX')],
-    'South Korea': [('KOSPI','^KS11'),('KOSDAQ','^KQ11')],
-    'Taiwan': [('TAIEX','^TWII')],
-    'Vietnam': [('VN-Index','^VNINDEX')],
-    'Thailand': [('SET Index','^SET.BK')],
-    'EU': [('Euro Stoxx 50','^STOXX50E'),('DAX','^GDAXI'),('CAC 40','^FCHI'),('FTSE 100','^FTSE')],
-    'Bangladesh': [('DSEX','DSEX.BD')],
-}
+st.title("🌐 Global Financial Market Explorer")
+st.caption("Live market data via Yahoo Finance. The directory provides major indices and selected large-cap assets; use the ticker search for any supported Yahoo Finance instrument.")
+st.caption(f"Last market refresh: {live_timestamp()} • Prices can be delayed depending on the exchange/data provider.")
 
-st.title('🌐 Global Financial Market Explorer')
-st.caption('Explore multiple major indices for each supported economy instead of being limited to one headline index. Data is fetched live through Yahoo Finance when the ticker is available.')
+country = st.selectbox("Country / market", list(MARKETS))
+period = st.selectbox("History", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=3)
 
-country = st.selectbox('Country / market', list(MARKETS))
-choices = MARKETS[country]
-selected = st.multiselect('Markets to compare', choices, default=[choices[0]], format_func=lambda x: f'{x[0]} ({x[1]})')
-period = st.selectbox('History', ['1mo','3mo','6mo','1y','2y'], index=2)
+market_options = MARKETS[country]
+market_labels = {f"{name} ({ticker})": (name, ticker, asset_type) for name, ticker, asset_type in market_options}
+selected_labels = st.multiselect("Indices / markets to compare", list(market_labels), default=list(market_labels)[:2])
 
-if not selected:
-    st.info('Select at least one market.')
-    st.stop()
-
-rows=[]; charts=[]
-for label,ticker in selected:
-    try:
-        data=yf.download(ticker,period=period,progress=False,auto_adjust=True)
-        if data.empty: continue
-        close=data['Close'].squeeze().dropna()
-        last=float(close.iloc[-1]); prev=float(close.iloc[-2]) if len(close)>1 else last
-        start=float(close.iloc[0])
-        rows.append({'Market':label,'Ticker':ticker,'Latest':round(last,2),'Daily %':round((last/prev-1)*100,2),'Period %':round((last/start-1)*100,2),'Observations':len(close)})
-        charts.append((label,close))
-    except Exception as exc:
-        st.warning(f'{label} ({ticker}) could not be loaded: {exc}')
+rows = []
+charts = []
+for label in selected_labels:
+    name, ticker, asset_type = market_labels[label]
+    data = download_history(ticker, period)
+    if data.empty or "Close" not in data:
+        st.warning(f"No live data returned for {name} ({ticker}).")
+        continue
+    close = pd.to_numeric(data["Close"], errors="coerce").dropna()
+    if close.empty:
+        continue
+    latest = float(close.iloc[-1]); previous = float(close.iloc[-2]) if len(close) > 1 else latest
+    start = float(close.iloc[0])
+    rows.append({"Market": name, "Ticker": ticker, "Type": asset_type, "Latest": round(latest, 2), "Daily %": round((latest / previous - 1) * 100, 2), "Period %": round((latest / start - 1) * 100, 2), "Observations": len(close)})
+    charts.append((name, close))
 
 if rows:
-    st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
-    for label,close in charts:
-        chart=close.rename(label).to_frame()
-        st.line_chart(chart,use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    for name, close in charts:
+        st.subheader(name)
+        st.line_chart(close, use_container_width=True)
 else:
-    st.error('No selected ticker returned data. Try another market or period.')
+    st.info("Select one or more markets to load live data.")
 
 st.divider()
-st.subheader('Any Yahoo Finance instrument')
-custom=st.text_input('Enter a ticker',placeholder='Example: RELIANCE.NS, TCS.NS, AAPL, MSFT, 0700.HK')
-if custom:
-    try:
-        data=yf.download(custom.strip(),period=period,progress=False,auto_adjust=True)
-        if data.empty: st.warning('No data found for this ticker.')
-        else:
-            close=data['Close'].squeeze().dropna()
-            last=float(close.iloc[-1]); prev=float(close.iloc[-2]) if len(close)>1 else last
-            st.metric('Latest close',f'{last:,.2f}',f'{(last/prev-1)*100:+.2f}%')
-            st.line_chart(close,use_container_width=True)
-    except Exception as exc:
-        st.error(f'Could not load {custom}: {exc}')
+st.subheader(f"📊 Major listed assets — {country}")
+assets = COMMON_ASSETS.get(country, [])
+if assets:
+    asset_rows = []
+    for name, ticker, asset_type in assets:
+        result = summarize(ticker, name)
+        if result:
+            asset_rows.append({"Asset": name, "Ticker": ticker, "Type": asset_type, "Latest": round(result["latest"], 2), "Daily %": round(result["daily_pct"], 2), "1Y %": round(result["period_pct"], 2), "Volume": result["volume"]})
+    if asset_rows:
+        st.dataframe(pd.DataFrame(asset_rows), use_container_width=True, hide_index=True)
+else:
+    st.caption("No curated company list is configured for this market yet. Use the ticker search below.")
+
+st.divider()
+st.subheader("🔎 Any Yahoo Finance instrument")
+custom = st.text_input("Enter ticker", placeholder="RELIANCE.NS, TCS.NS, AAPL, MSFT, NVDA, 0700.HK")
+custom_period = st.selectbox("Custom ticker history", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=3, key="custom_period")
+if custom.strip():
+    data = download_history(custom.strip(), custom_period)
+    if data.empty:
+        st.warning("No data found. Check the ticker symbol and exchange suffix.")
+    else:
+        result = summarize(custom.strip())
+        if result:
+            a, b, c = st.columns(3)
+            a.metric("Latest", f"{result['latest']:,.2f}")
+            b.metric("Daily change", f"{result['daily_pct']:+.2f}%")
+            c.metric("1Y change", f"{result['period_pct']:+.2f}%")
+        st.line_chart(pd.to_numeric(data["Close"], errors="coerce").dropna(), use_container_width=True)
