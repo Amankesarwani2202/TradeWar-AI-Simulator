@@ -13,12 +13,11 @@ def inject_css():
         /*
          * The app supports both Streamlit light and dark themes. A number of
          * pages still contain inline colors from the original light design.
-         * Streamlit exposes the active theme through --st-* CSS variables, so
-         * normalize those legacy inline colors here instead of maintaining
-         * separate dark-mode hacks on individual pages.
+         * Streamlit exposes the active theme through --st-* CSS variables,
+         * allowing these legacy elements to follow the selected theme.
          */
 
-        /* Light neutral surfaces -> active theme surfaces. */
+        /* Neutral light surfaces -> active theme surfaces. */
         [style*="background:#f8fafc"],
         [style*="background: #f8fafc"],
         [style*="background:#F8FAFC"],
@@ -35,7 +34,7 @@ def inject_css():
             background: var(--st-background-color) !important;
         }
 
-        /* Semantic status cards keep their meaning in both themes. */
+        /* Semantic status surfaces use Streamlit's theme-aware palette. */
         [style*="background:#dcfce7"],
         [style*="background: #dcfce7"],
         [style*="background:#DCFCE7"],
@@ -112,30 +111,32 @@ def inject_css():
             border-left-color: var(--st-gray-color) !important;
         }
 
-        /* Sidebar headings that were explicitly forced to dark text. */
         [data-testid="stSidebar"] h2[style*="#1f2937"],
         [data-testid="stSidebar"] h2[style*="#1F2937"] {
             color: var(--st-text-color) !important;
         }
 
-        /* Alerts should always inherit the active theme's readable text. */
         [data-testid="stAlert"] { color: var(--st-text-color); }
         [data-testid="stAlert"] p { color: inherit !important; }
 
-        /* Keep intentional semantic accent text intact. */
-        [style*="color:#16a34a"],
-        [style*="color: #16a34a"],
-        [style*="color:#16A34A"],
-        [style*="color: #16A34A"],
-        [style*="color:#22c55e"],
-        [style*="color: #22c55e"],
-        [style*="color:#ef4444"],
-        [style*="color: #ef4444"],
-        [style*="color:#f59e0b"],
-        [style*="color: #f59e0b"] {
-            /* The declaration is intentionally not replaced; these selectors
-               exist so the semantic accent rules remain explicit and easy to
-               extend without changing the neutral text normalization above. */
+        /* Plotly charts can contain a hard-coded white template. Normalize
+           their canvas, grid, and axis text to the active Streamlit theme. */
+        .js-plotly-plot .plotly,
+        .js-plotly-plot .plotly .main-svg,
+        .js-plotly-plot .plotly .bg {
+            background: var(--st-background-color) !important;
+            fill: var(--st-background-color) !important;
+        }
+        .js-plotly-plot .plotly .gridlayer path,
+        .js-plotly-plot .plotly .zerolinelayer path {
+            stroke: var(--st-border-color) !important;
+        }
+        .js-plotly-plot .plotly .xtick text,
+        .js-plotly-plot .plotly .ytick text,
+        .js-plotly-plot .plotly .gtitle,
+        .js-plotly-plot .plotly .xtitle,
+        .js-plotly-plot .plotly .ytitle {
+            fill: var(--st-text-color) !important;
         }
         </style>''',
         unsafe_allow_html=True,
