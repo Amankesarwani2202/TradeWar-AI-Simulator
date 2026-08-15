@@ -7,6 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from statsmodels.tsa.arima.model import ARIMA
+from theme import apply_plotly_theme
 try:
     import yfinance as yf
 except Exception: yf = None
@@ -34,17 +35,7 @@ COUNTRY_PROFILES={
 "Thailand":{"population_mn":71,"urbanization_pct":52,"median_age":40,"gdp_growth":2.5,"inflation":3.8,"labor_force_mn":38,"primary_sector_pct":31,"secondary_sector_pct":35,"tertiary_sector_pct":30,"quaternary_sector_pct":4,"currency":"THB","currency_vs_usd":35.5,"stock_index":"SET Index","stock_ticker":"^SET.BK","market_cap_bn":500,"age_distribution":{"0-14":17,"15-29":19,"30-44":25,"45-59":23,"60+":16}}}
 
 def inject_css():
-    st.markdown('''<style>
-    .main .block-container{padding-top:2rem;padding-bottom:2rem} [data-testid="metric-container"]{padding:1.1rem;border-radius:.5rem} h1{font-weight:700} h2{font-weight:600}
-    /* Keep legacy light cards readable when Streamlit is using the dark theme. */
-    div[style*="background:#f8fafc"],div[style*="background: #f8fafc"]{background:var(--secondary-background-color)!important;color:var(--text-color)!important;border-color:rgba(148,163,184,.35)!important}
-    div[style*="background:#eff6ff"],div[style*="background: #eff6ff"]{background:rgba(59,130,246,.14)!important;color:var(--text-color)!important}
-    div[style*="background:#dcfce7"],div[style*="background: #dcfce7"]{background:rgba(34,197,94,.14)!important;color:var(--text-color)!important}
-    div[style*="background:#fef3c7"],div[style*="background: #fef3c7"]{background:rgba(245,158,11,.16)!important;color:var(--text-color)!important}
-    div[style*="background:#fee2e2"],div[style*="background: #fee2e2"]{background:rgba(239,68,68,.14)!important;color:var(--text-color)!important}
-    div[style*="color:#0f172a"],div[style*="color: #0f172a"],div[style*="color:#475569"],div[style*="color: #475569"],div[style*="color:#64748b"],div[style*="color: #64748b"],p[style*="color:#0f172a"],p[style*="color: #0f172a"],p[style*="color:#475569"],p[style*="color: #475569"],p[style*="color:#64748b"],p[style*="color: #64748b"]{color:var(--text-color)!important}
-    [data-testid="stAlert"]{color:var(--text-color)}
-    </style>''',unsafe_allow_html=True)
+    st.markdown('''<style>.main .block-container{padding-top:2rem;padding-bottom:2rem}[data-testid="metric-container"]{padding:1.1rem;border-radius:.5rem}h1,h2,h3,h4,h5,h6{font-weight:600}</style>''',unsafe_allow_html=True)
 
 def generate_trade_data():
     records=[]; base={"China":2500,"India":450,"Vietnam":280,"Bangladesh":45,"Thailand":250,"South Korea":600,"Taiwan":380,"Japan":700,"EU":2200,"US":1600}
@@ -64,18 +55,6 @@ def build_trade_network():
     vuln={c:round(sum(g[u][c]["weight"] for u in g.predecessors(c))/1000*.5+bc.get(c,0)*30+p.get(c,0)*2,3) for c in COUNTRIES}
     return g,m,dict(sorted(vuln.items(),key=lambda x:-x[1]))
 
-def build_scenario_trade_network(base_graph,country,category,tariff_change_pct,target_partner):
-    g=base_graph.copy();alts=ALTERNATIVE_SUPPLIERS.get(country,[]);m=min(.4,.1+abs(TRADE_ELASTICITY.get(category,-.7))*.12)
-    for a,b in list(g.edges()):
-        w=g[a][b]["weight"]
-        if a==country and b==target_partner: w*=1-m if tariff_change_pct>0 else 1+m*.5 if tariff_change_pct<0 else 1
-        elif a in alts and b==target_partner: w*=1+m*.7 if tariff_change_pct>0 else 1-m*.3 if tariff_change_pct<0 else 1
-        g[a][b]["weight"]=max(1,round(w,2))
-    p=nx.pagerank(g,weight="weight");bc=nx.betweenness_centrality(g,weight="weight");ic=nx.in_degree_centrality(g);oc=nx.out_degree_centrality(g)
-    mdf=pd.DataFrame({"country":COUNTRIES,"pagerank":[round(p[c],4) for c in COUNTRIES],"import_dependency":[round(ic[c],4) for c in COUNTRIES],"export_reach":[round(oc[c],4) for c in COUNTRIES],"bridge_score":[round(bc[c],4) for c in COUNTRIES]}).sort_values("pagerank",ascending=False)
-    vuln={c:round(sum(g[u][c]["weight"] for u in g.predecessors(c))/1000*.5+bc[c]*30+p[c]*2,3) for c in COUNTRIES}
-    return g,mdf,dict(sorted(vuln.items(),key=lambda x:-x[1]))
-
 def forecast_series(series,steps=3):
     if len(series)<5:return np.array([series[-1]]*steps)
     try:return ARIMA(series,order=(1,1,1)).fit().forecast(steps=steps)
@@ -89,8 +68,7 @@ def build_country_scenario(df,country,category,tariff_change_pct,target_partner,
         pct=change*factor if c==country else (-.4*change*factor if c in alts else (.12*abs(change)*factor if c==target_partner and tariff_change_pct>0 else -.05*abs(change)*factor if c==target_partner else .04*change*factor))
         rows.append({"country":c,"baseline_export_bn":round(b,2),"predicted_export_bn":round(b*(1+pct/100),2),"change_pct":round(pct,2),"change_bn":round(b*pct/100,2)})
     impact=pd.DataFrame(rows).sort_values("change_bn",ascending=False)
-    scores={}
-    pool=abs(delta)*min(.9,.35+abs(tariff_change_pct)/100*.45)
+    scores={};pool=abs(delta)*min(.9,.35+abs(tariff_change_pct)/100*.45)
     if tariff_change_pct>0:
         weights=[1/(i+1) for i in range(len(alts))];total=sum(weights)
         for i,a in enumerate(alts):
@@ -103,18 +81,21 @@ def build_country_scenario(df,country,category,tariff_change_pct,target_partner,
         btype="gain"
     else:btype="none"
     beneficiaries=[k for k,v in sorted(scores.items(),key=lambda x:x[1],reverse=True) if v>.001][:3]
-    return {"country":country,"category":category,"target_partner":target_partner,"baseline_export_bn":round(base,2),"predicted_export_bn":round(new,2),"trade_change_pct":round(change,2),"trade_delta_bn":round(delta,2),"risk_score":round(min(100,abs(change)*1.6+12),1),"trade_diversion":{k:round(v,3) for k,v in scores.items()},"likely_beneficiaries":beneficiaries,"beneficiary_type":btype,"impact_df":impact,"projection_horizon":projection_horizon}
+    status="significant" if beneficiaries else "limited"
+    return {"country":country,"category":category,"target_partner":target_partner,"baseline_export_bn":round(base,2),"predicted_export_bn":round(new,2),"trade_change_pct":round(change,2),"trade_delta_bn":round(delta,2),"risk_score":round(min(100,abs(change)*1.6+12),1),"trade_diversion":{k:round(v,3) for k,v in scores.items()},"likely_beneficiaries":beneficiaries,"beneficiary_type":btype,"beneficiary_status":status,"impact_df":impact,"projection_horizon":projection_horizon,"elasticity":e}
 
-def build_teaching_explanation(s,tariff):return {"concept":"Trade Elasticity + Trade Diversion" if tariff>0 else "Comparative Advantage + Market Access" if tariff<0 else "Baseline Equilibrium","concept_def":"The model estimates how tariff-driven price changes alter demand and redirect trade between suppliers.","mechanism":f"Tariff shock: {tariff:+.0f}%. Elasticity applied: {abs(TRADE_ELASTICITY.get(s['category'],-.7)):.1f}.","numbers":f"Exports: ${s['baseline_export_bn']:.1f}B → ${s['predicted_export_bn']:.1f}B ({s['trade_change_pct']:+.1f}%).","wider":f"Likely beneficiaries: {', '.join(s['likely_beneficiaries']) or 'None identified'}.","beginner":"A tariff makes one route relatively more or less attractive, so trade flows adjust.","key_terms":{"Tariff":"A tax on imports.","Trade diversion":"Trade moving to another supplier after a relative price change.","Comparative advantage":"Producing at a lower relative opportunity cost."}}
+def build_teaching_explanation(s,tariff):
+    return {"concept":"Trade Elasticity + Trade Diversion" if tariff>0 else "Comparative Advantage + Market Access" if tariff<0 else "Baseline Equilibrium","concept_def":"The model estimates how tariff-driven price changes alter demand and redirect trade between suppliers.","mechanism":f"Tariff shock: {tariff:+.0f}%. Elasticity applied: {abs(TRADE_ELASTICITY.get(s['category'],-.7)):.1f}.","numbers":f"Exports: ${s['baseline_export_bn']:.1f}B → ${s['predicted_export_bn']:.1f}B ({s['trade_change_pct']:+.1f}%).","wider":f"Likely beneficiaries: {', '.join(s['likely_beneficiaries']) or 'None identified'}.","beginner":"A tariff makes one route relatively more or less attractive, so trade flows adjust.","key_terms":{"Tariff":"A tax on imports.","Trade diversion":"Trade moving to another supplier after a relative price change.","Comparative advantage":"Producing at a lower relative opportunity cost."}}
 
 def render_teaching_panel(t):
-    st.info(t["concept"]);st.markdown(t["concept_def"]);a,b=st.columns(2);a.markdown('**Mechanism**\\n\\n'+t['mechanism']);b.markdown('**Numbers**\\n\\n'+t['numbers']+'\\n\\n**Wider impact**\\n\\n'+t['wider'])
+    st.info(t["concept"])
+    st.markdown(t["concept_def"])
+    a,b=st.columns(2)
+    a.markdown(f"**Mechanism**\n\n{t['mechanism']}")
+    b.markdown(f"**Numbers**\n\n{t['numbers']}\n\n**Wider impact**\n\n{t['wider']}")
 
 def build_forecast_chart(df,country,category,tariff_change_pct,steps=3):
-    hist=df[(df.country==country)&(df.category==category)].sort_values('year');base=forecast_series(hist.export_value_bn_usd.values,steps);scenario=np.maximum(0,base*(1+TRADE_ELASTICITY.get(category,-.7)*tariff_change_pct/100));years=list(range(2025,2025+steps));fig=go.Figure();fig.add_trace(go.Scatter(x=hist.year,y=hist.export_value_bn_usd,mode='lines+markers',name='Historical'));fig.add_trace(go.Scatter(x=years,y=base,mode='lines+markers',name='Baseline'));fig.add_trace(go.Scatter(x=years,y=scenario,mode='lines+markers',name='Policy scenario'));fig.update_layout(title=f'Export Trajectory — {country} | {category}',template='plotly_dark',height=400);return fig,base,scenario
-
-def build_network_figure(g,pagerank,title='Trade Dependency Network'):
-    fig,ax=plt.subplots(figsize=(10,7));pos=nx.spring_layout(g,seed=42);nx.draw_networkx(g,pos,node_size=[pagerank[n]*60000 for n in g],node_color=list(pagerank.values()),cmap=cm.plasma,with_labels=True,edge_color='#aaa',ax=ax);ax.set_title(title);ax.axis('off');return fig
+    hist=df[(df.country==country)&(df.category==category)].sort_values('year');base=forecast_series(hist.export_value_bn_usd.values,steps);scenario=np.maximum(0,base*(1+TRADE_ELASTICITY.get(category,-.7)*tariff_change_pct/100));years=list(range(2025,2025+steps));fig=go.Figure();fig.add_trace(go.Scatter(x=hist.year,y=hist.export_value_bn_usd,mode='lines+markers',name='Historical'));fig.add_trace(go.Scatter(x=years,y=base,mode='lines+markers',name='Baseline'));fig.add_trace(go.Scatter(x=years,y=scenario,mode='lines+markers',name='Policy scenario'));return apply_plotly_theme(fig.update_layout(title=f'Export Trajectory — {country} | {category}',height=400)),base,scenario
 
 def apply_policy_shock_to_scenario(s,event_name,shock_pct):
     if not event_name or event_name=='None':return s
@@ -124,8 +105,14 @@ def build_policy_shock_summary(event_name,shock_pct):return 'No historical polic
 def render_scenario_summary_metrics(s):
     a,b,c,d=st.columns(4);a.metric('Exporter',s['country']);b.metric('Category',s['category']);c.metric('Predicted export change',f"{s['trade_change_pct']:+.1f}%",delta=f"${s['trade_delta_bn']:+.1f}B");d.metric('Trade disruption risk',f"{s['risk_score']:.0f}/100")
 def render_overview_tab(s,impact):
-    st.dataframe(impact[['country','baseline_export_bn','predicted_export_bn','change_pct','change_bn']],use_container_width=True,hide_index=True);st.plotly_chart(px.bar(impact,x='country',y='change_bn',color='change_bn',color_continuous_scale=['#ef4444','#f3f4f6','#10b981']),use_container_width=True)
+    st.dataframe(impact[['country','baseline_export_bn','predicted_export_bn','change_pct','change_bn']],use_container_width=True,hide_index=True)
+    fig=px.bar(impact,x='country',y='change_bn',color='change_bn',color_continuous_scale=['#ef4444','#f3f4f6','#10b981'])
+    st.plotly_chart(apply_plotly_theme(fig),use_container_width=True)
 def render_forecast_tab(df,country,category,tariff,steps):
     fig,_,_=build_forecast_chart(df,country,category,tariff,steps);st.plotly_chart(fig,use_container_width=True)
 def render_network_tab(G,country,category,tariff,target):
-    ng,metrics,vuln=build_scenario_trade_network(G,country,category,tariff,target);p=nx.pagerank(ng,weight='weight');st.pyplot(build_network_figure(ng,p,f'{category} network — {country} ({tariff:+.0f}%)'));st.dataframe(metrics,use_container_width=True,hide_index=True);st.dataframe(pd.DataFrame(list(vuln.items()),columns=['Country','Vulnerability']),use_container_width=True,hide_index=True)
+    from trade_network import build_scenario_trade_network, build_network_figure
+    ng,metrics,vuln=build_scenario_trade_network(country,category,tariff,target)
+    st.plotly_chart(build_network_figure(ng,metrics,f'{category} network — {country} ({tariff:+.0f}%)'),use_container_width=True)
+    st.dataframe(metrics,use_container_width=True,hide_index=True)
+    st.dataframe(pd.DataFrame(list(vuln.items()),columns=['Country','Vulnerability']),use_container_width=True,hide_index=True)
