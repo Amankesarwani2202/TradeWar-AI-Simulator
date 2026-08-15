@@ -36,6 +36,14 @@ COUNTRY_PROFILES={
 def inject_css():
     st.markdown('''<style>
     .main .block-container{padding-top:2rem;padding-bottom:2rem} [data-testid="metric-container"]{padding:1.1rem;border-radius:.5rem} h1{font-weight:700} h2{font-weight:600}
+    /* Keep legacy light cards readable when Streamlit is using the dark theme. */
+    div[style*="background:#f8fafc"],div[style*="background: #f8fafc"]{background:var(--secondary-background-color)!important;color:var(--text-color)!important;border-color:rgba(148,163,184,.35)!important}
+    div[style*="background:#eff6ff"],div[style*="background: #eff6ff"]{background:rgba(59,130,246,.14)!important;color:var(--text-color)!important}
+    div[style*="background:#dcfce7"],div[style*="background: #dcfce7"]{background:rgba(34,197,94,.14)!important;color:var(--text-color)!important}
+    div[style*="background:#fef3c7"],div[style*="background: #fef3c7"]{background:rgba(245,158,11,.16)!important;color:var(--text-color)!important}
+    div[style*="background:#fee2e2"],div[style*="background: #fee2e2"]{background:rgba(239,68,68,.14)!important;color:var(--text-color)!important}
+    div[style*="color:#0f172a"],div[style*="color: #0f172a"],div[style*="color:#475569"],div[style*="color: #475569"],div[style*="color:#64748b"],div[style*="color: #64748b"],p[style*="color:#0f172a"],p[style*="color: #0f172a"],p[style*="color:#475569"],p[style*="color: #475569"],p[style*="color:#64748b"],p[style*="color: #64748b"]{color:var(--text-color)!important}
+    [data-testid="stAlert"]{color:var(--text-color)}
     </style>''',unsafe_allow_html=True)
 
 def generate_trade_data():
@@ -100,7 +108,7 @@ def build_country_scenario(df,country,category,tariff_change_pct,target_partner,
 def build_teaching_explanation(s,tariff):return {"concept":"Trade Elasticity + Trade Diversion" if tariff>0 else "Comparative Advantage + Market Access" if tariff<0 else "Baseline Equilibrium","concept_def":"The model estimates how tariff-driven price changes alter demand and redirect trade between suppliers.","mechanism":f"Tariff shock: {tariff:+.0f}%. Elasticity applied: {abs(TRADE_ELASTICITY.get(s['category'],-.7)):.1f}.","numbers":f"Exports: ${s['baseline_export_bn']:.1f}B → ${s['predicted_export_bn']:.1f}B ({s['trade_change_pct']:+.1f}%).","wider":f"Likely beneficiaries: {', '.join(s['likely_beneficiaries']) or 'None identified'}.","beginner":"A tariff makes one route relatively more or less attractive, so trade flows adjust.","key_terms":{"Tariff":"A tax on imports.","Trade diversion":"Trade moving to another supplier after a relative price change.","Comparative advantage":"Producing at a lower relative opportunity cost."}}
 
 def render_teaching_panel(t):
-    st.info(t["concept"]);st.markdown(t["concept_def"]);a,b=st.columns(2);a.markdown('**Mechanism**\n\n'+t['mechanism']);b.markdown('**Numbers**\n\n'+t['numbers']+'\n\n**Wider impact**\n\n'+t['wider'])
+    st.info(t["concept"]);st.markdown(t["concept_def"]);a,b=st.columns(2);a.markdown('**Mechanism**\\n\\n'+t['mechanism']);b.markdown('**Numbers**\\n\\n'+t['numbers']+'\\n\\n**Wider impact**\\n\\n'+t['wider'])
 
 def build_forecast_chart(df,country,category,tariff_change_pct,steps=3):
     hist=df[(df.country==country)&(df.category==category)].sort_values('year');base=forecast_series(hist.export_value_bn_usd.values,steps);scenario=np.maximum(0,base*(1+TRADE_ELASTICITY.get(category,-.7)*tariff_change_pct/100));years=list(range(2025,2025+steps));fig=go.Figure();fig.add_trace(go.Scatter(x=hist.year,y=hist.export_value_bn_usd,mode='lines+markers',name='Historical'));fig.add_trace(go.Scatter(x=years,y=base,mode='lines+markers',name='Baseline'));fig.add_trace(go.Scatter(x=years,y=scenario,mode='lines+markers',name='Policy scenario'));fig.update_layout(title=f'Export Trajectory — {country} | {category}',template='plotly_dark',height=400);return fig,base,scenario
