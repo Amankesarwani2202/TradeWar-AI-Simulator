@@ -2,17 +2,17 @@ import numpy as np
 import streamlit as st
 from utils import (
     COUNTRIES, CATEGORIES,
-    inject_css, generate_trade_data, build_trade_network,
+    inject_css, generate_trade_data,
     build_country_scenario, build_teaching_explanation, render_teaching_panel,
     apply_policy_shock_to_scenario, build_policy_shock_summary,
     render_scenario_summary_metrics, render_overview_tab,
-    render_forecast_tab, render_network_tab,
+    render_forecast_tab,
 )
+from trade_network import render_network_tab
 
 inject_css()
 np.random.seed(42)
 df = generate_trade_data()
-G, _, _ = build_trade_network()
 
 PRESET_GROUPS = {
     "🌍 Global Trade War": {
@@ -148,7 +148,7 @@ with overview_tab:
 with forecast_tab:
     render_forecast_tab(df, country, category, tariff_change, forecast_steps)
 with network_tab:
-    render_network_tab(G, country, category, tariff_change, target_partner)
+    render_network_tab(country, category, tariff_change, target_partner)
 
 st.markdown("---")
 with st.expander("📚 How this simulator works", expanded=False):
