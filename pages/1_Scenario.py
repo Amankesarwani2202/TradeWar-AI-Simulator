@@ -10,13 +10,10 @@ from utils import (
 )
 
 inject_css()
-
 np.random.seed(42)
 df = generate_trade_data()
 G, _, _ = build_trade_network()
 
-# ── Scenario presets ──────────────────────────────────────────────────────────
-# Format: country = EXPORTER being affected | target_partner = the tariff IMPOSER
 PRESET_GROUPS = {
     "🌍 Global Trade War": {
         "US tariffs on China electronics (+25%)": {"country": "China", "category": "Electronics", "target_partner": "US", "tariff_change": 25},
@@ -55,239 +52,114 @@ PRESET_GROUPS = {
         "India–China border escalation: all categories (+25%)": {"country": "China", "category": "Machinery", "target_partner": "India", "tariff_change": 25},
     },
 }
-
-# Flatten into a single selectbox list with group labels
 PRESET_FLAT = {"— Custom (set your own below) —": {"country": "China", "category": "Electronics", "target_partner": "US", "tariff_change": 10}}
 for group_label, presets in PRESET_GROUPS.items():
-    for k, v in presets.items():
-        PRESET_FLAT[f"{group_label} › {k}"] = v
+    for key, value in presets.items():
+        PRESET_FLAT[f"{group_label} › {key}"] = value
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
-st.sidebar.markdown("<h2 style='font-size:1.3rem;color:#1f2937;margin-bottom:0.75rem;'>⚙️ Build Your Scenario</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='font-size:1.3rem;margin-bottom:.75rem;'>⚙️ Build Your Scenario</h2>", unsafe_allow_html=True)
 st.sidebar.caption("**Step 1:** Choose a preset or build your own. **Step 2:** Fine-tune below.")
-
-preset_key = st.sidebar.selectbox(
-    "Scenario preset",
-    list(PRESET_FLAT.keys()),
-    help="Pre-configured scenarios that reflect real-world trade policy situations",
-)
+preset_key = st.sidebar.selectbox("Scenario preset", list(PRESET_FLAT.keys()))
 selected = PRESET_FLAT[preset_key]
-
 st.sidebar.divider()
 st.sidebar.markdown("**Step 2 — Fine-tune the scenario parameters**")
 
-country = st.sidebar.selectbox(
-    "Affected exporter",
-    COUNTRIES,
-    index=COUNTRIES.index(selected["country"]),
-    help="Which country's exports are being hit by the tariff? This is the seller.",
-)
-category = st.sidebar.selectbox(
-    "Product category",
-    ["Electronics", "Textiles", "Semiconductors", "Machinery", "Chemicals", "Steel"],
-    index=["Electronics", "Textiles", "Semiconductors", "Machinery", "Chemicals", "Steel"].index(selected["category"]),
-    help="The type of good being taxed. Different goods have different price sensitivities.",
-)
-target_partner = st.sidebar.selectbox(
-    "Tariff imposer (importer)",
-    ["US", "EU", "China", "India", "Japan", "South Korea"],
-    index=["US", "EU", "China", "India", "Japan", "South Korea"].index(
-        selected["target_partner"] if selected["target_partner"] in ["US", "EU", "China", "India", "Japan", "South Korea"] else "US"
-    ),
-    help="Which country is imposing the tariff? This is the buyer who sets the barrier.",
-)
-tariff_change = st.sidebar.slider(
-    "Tariff change (%)",
-    min_value=-30, max_value=30, value=selected["tariff_change"], step=1,
-    help="Positive = tariff INCREASE (exports fall). Negative = tariff REDUCTION (exports rise).",
-)
+country = st.sidebar.selectbox("Affected exporter", COUNTRIES, index=COUNTRIES.index(selected["country"]), help="Which country's exports are being hit by the tariff?")
+category_options = list(CATEGORIES)
+category = st.sidebar.selectbox("Product category", category_options, index=category_options.index(selected["category"]))
+partners = ["US", "EU", "China", "India", "Japan", "South Korea"]
+selected_partner = selected["target_partner"] if selected["target_partner"] in partners else "US"
+target_partner = st.sidebar.selectbox("Tariff imposer (importer)", partners, index=partners.index(selected_partner))
+tariff_change = st.sidebar.slider("Tariff change (%)", min_value=-30, max_value=30, value=selected["tariff_change"], step=1, help="Positive = tariff increase. Negative = tariff reduction.")
 forecast_steps = st.sidebar.slider("Forecast horizon (years)", min_value=1, max_value=5, value=3, step=1)
 
 if tariff_change > 0:
-    direction_hint = "Tariff increase — exporter loses"
-    hint_color = "#ef4444"
+    direction_hint, hint_color = "Tariff increase — exporter loses", "#ef4444"
 elif tariff_change < 0:
-    direction_hint = "Tariff reduction — exporter gains"
-    hint_color = "#16a34a"
+    direction_hint, hint_color = "Tariff reduction — exporter gains", "#16a34a"
 else:
-    direction_hint = "No change from baseline"
-    hint_color = "#6b7280"
-st.sidebar.markdown(
-    f'<div style="background:#f8fafc;padding:0.5rem 0.75rem;border-radius:0.4rem;border-left:3px solid {hint_color};">'
-    f'<p style="margin:0;font-size:0.82rem;font-weight:600;color:{hint_color};">{direction_hint}</p>'
-    f"</div>",
-    unsafe_allow_html=True,
-)
+    direction_hint, hint_color = "No change from baseline", "#6b7280"
+st.sidebar.markdown(f'<div style="background:#f8fafc;padding:.5rem .75rem;border-radius:.4rem;border-left:3px solid {hint_color};"><p style="margin:0;font-size:.82rem;font-weight:600;color:{hint_color};">{direction_hint}</p></div>', unsafe_allow_html=True)
 
 st.sidebar.divider()
 st.sidebar.markdown("**Optional: Historical shock overlay**")
-st.sidebar.caption("Combine the tariff scenario with a historical event to see compounding effects.")
-historical_event = st.sidebar.selectbox(
-    "Historical policy shock",
-    ["None", "Post-9/11 US financial stabilization", "COVID-19 trade disruption", "India 2016 demonetization shock"],
-)
+historical_event = st.sidebar.selectbox("Historical policy shock", ["None", "Post-9/11 US financial stabilization", "COVID-19 trade disruption", "India 2016 demonetization shock"])
 shock_pct = st.sidebar.slider("Shock intensity (%)", min_value=-20, max_value=20, value=5, step=1)
 
-# ── Main content ─────────────────────────────────────────────────────────────
 st.title("⚙️ Custom Scenario Simulator")
-st.markdown(
-    '<p style="font-size:1.05rem;color:#6b7280;margin-top:-0.75rem;margin-bottom:1.5rem;">'
-    "Model how tariff changes ripple through supply chains, forecasts, and trade networks — with step-by-step economic explanations"
-    "</p>",
-    unsafe_allow_html=True,
-)
-
-# Context banner
+st.markdown('<p style="font-size:1.05rem;color:#6b7280;margin-top:-.75rem;margin-bottom:1.5rem;">Model how tariff changes ripple through supply chains, forecasts, and trade networks — with step-by-step economic explanations</p>', unsafe_allow_html=True)
 tariff_direction_word = "increase" if tariff_change > 0 else "reduction" if tariff_change < 0 else "no change"
 _ctx_border = "#ef4444" if tariff_change > 0 else "#16a34a" if tariff_change < 0 else "#6b7280"
-st.markdown(
-    f'<div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:0.5rem;border:1px solid #e2e8f0;border-left:4px solid {_ctx_border};margin-bottom:1.5rem;">'
-    f'<p style="margin:0;font-size:0.95rem;font-weight:600;color:#0f172a;">'
-    f'{abs(tariff_change)}% tariff {tariff_direction_word} &nbsp;·&nbsp; {country} → {target_partner} &nbsp;·&nbsp; {category}'
-    f'</p>'
-    f'<p style="margin:0.3rem 0 0 0;font-size:0.82rem;color:#64748b;">'
-    f'{target_partner} {"raises" if tariff_change > 0 else "cuts" if tariff_change < 0 else "keeps"} tariffs on {country}\'s {category} by {abs(tariff_change)}%. '
-    f'Trade elasticity applied across all 10 economies.'
-    f'</p>'
-    f'</div>',
-    unsafe_allow_html=True,
-)
+st.markdown(f'<div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:.5rem;border:1px solid #e2e8f0;border-left:4px solid {_ctx_border};margin-bottom:1.5rem;"><p style="margin:0;font-size:.95rem;font-weight:600;color:#0f172a;">{abs(tariff_change)}% tariff {tariff_direction_word} &nbsp;·&nbsp; {country} → {target_partner} &nbsp;·&nbsp; {category}</p><p style="margin:.3rem 0 0;font-size:.82rem;color:#64748b;">{target_partner} {"raises" if tariff_change > 0 else "cuts" if tariff_change < 0 else "keeps"} tariffs on {country}'s {category} by {abs(tariff_change)}%. Trade elasticity applied across all 10 economies.</p></div>', unsafe_allow_html=True)
 
-# Compute scenario
-from utils import TRADE_ELASTICITY
 scenario = build_country_scenario(df, country, category, tariff_change, target_partner, projection_horizon=forecast_steps)
 scenario = apply_policy_shock_to_scenario(scenario, historical_event, shock_pct)
 teaching = build_teaching_explanation(scenario, tariff_change)
 
-# ── Summary metrics ───────────────────────────────────────────────────────────
 st.markdown("### 📊 Scenario Summary")
 render_scenario_summary_metrics(scenario)
-
-# Outcome box
 st.markdown("<br/>", unsafe_allow_html=True)
 emoji = "📉" if tariff_change > 0 else "📈" if tariff_change < 0 else "➡️"
-_border = "#ef4444" if tariff_change > 0 else "#16a34a" if tariff_change < 0 else "#6b7280"
-st.markdown(
-    f'<div style="background:#f8fafc;padding:1.25rem 1.5rem;border-radius:0.5rem;border:1px solid #e2e8f0;border-left:4px solid {_border};">'
-    f'<p style="margin:0;font-size:0.88rem;color:#374151;">'
-    f'<strong>{abs(tariff_change)}% tariff {tariff_direction_word}</strong> on '
-    f'<strong>{country}\'s {category}</strong> exports to <strong>{target_partner}</strong>'
-    f'</p>'
-    f'<p style="margin:0.6rem 0 0 0;font-size:1.1rem;font-weight:700;color:#0f172a;">'
-    f'{emoji} Predicted exports: '
-    f'<span style="color:#64748b;">${scenario["baseline_export_bn"]:.1f}B</span> → '
-    f'<span style="color:#0f172a;">${scenario["predicted_export_bn"]:.1f}B</span>'
-    f'<span style="font-size:0.85rem;font-weight:400;color:#64748b;"> ({scenario["trade_change_pct"]:+.1f}% | ${scenario["trade_delta_bn"]:+.1f}B)</span>'
-    f'</p>'
-    f'</div>',
-    unsafe_allow_html=True,
-)
-
+st.markdown(f'<div style="background:#f8fafc;padding:1.25rem 1.5rem;border-radius:.5rem;border:1px solid #e2e8f0;border-left:4px solid {_ctx_border};"><p style="margin:0;font-size:.88rem;color:#374151;"><strong>{abs(tariff_change)}% tariff {tariff_direction_word}</strong> on <strong>{country}\'s {category}</strong> exports to <strong>{target_partner}</strong></p><p style="margin:.6rem 0 0;font-size:1.1rem;font-weight:700;color:#0f172a;">{emoji} Predicted exports: <span style="color:#64748b;">${scenario["baseline_export_bn"]:.1f}B</span> → <span style="color:#0f172a;">${scenario["predicted_export_bn"]:.1f}B</span><span style="font-size:.85rem;font-weight:400;color:#64748b;"> ({scenario["trade_change_pct"]:+.1f}% | ${scenario["trade_delta_bn"]:+.1f}B)</span></p></div>', unsafe_allow_html=True)
 if historical_event != "None":
     st.info(f"⚙️ **Historical shock also applied:** {build_policy_shock_summary(historical_event, shock_pct)}")
 
-# ── Who benefits? ─────────────────────────────────────────────────────────────
 st.markdown("### 🎯 Who benefits in this scenario?")
 b_type = scenario.get("beneficiary_type", "none")
+status = scenario.get("beneficiary_status", "limited")
+beneficiaries = scenario.get("likely_beneficiaries", [])
 col_ben1, col_ben2 = st.columns(2, gap="medium")
-
 with col_ben1:
-    beneficiaries = scenario["likely_beneficiaries"]
     if beneficiaries and b_type == "diversion":
+        title = "🚀 Trade diversion beneficiaries"
         label = f"Alternative suppliers capturing trade diverted away from {country}"
-        st.markdown(
-            f'<div style="background:#f0f9ff;padding:1.2rem;border-radius:0.5rem;border-left:4px solid #06b6d4;">'
-            f'<p style="margin:0;font-size:0.8rem;color:#0e7490;font-weight:600;margin-bottom:0.3rem;">🚀 Trade diversion beneficiaries</p>'
-            f'<p style="margin:0;font-size:1rem;font-weight:700;color:#0369a1;">{", ".join(beneficiaries)}</p>'
-            f'<p style="margin:0.3rem 0 0 0;font-size:0.8rem;color:#6b7280;">{label}</p>'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
     elif beneficiaries and b_type == "gain":
+        title = "🏆 Beneficiaries of lower tariffs"
         label = f"Countries benefiting from {country}'s improved access to {target_partner}"
-        st.markdown(
-            f'<div style="background:#f0fdf4;padding:1.2rem;border-radius:0.5rem;border-left:4px solid #22c55e;">'
-            f'<p style="margin:0;font-size:0.8rem;color:#15803d;font-weight:600;margin-bottom:0.3rem;">🏆 Beneficiaries of lower tariffs</p>'
-            f'<p style="margin:0;font-size:1rem;font-weight:700;color:#166534;">{", ".join(beneficiaries)}</p>'
-            f'<p style="margin:0.3rem 0 0 0;font-size:0.8rem;color:#6b7280;">{label}</p>'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    elif status == "baseline":
+        title = "➡️ Baseline scenario"
+        label = "No tariff change was applied, so there is no incremental beneficiary effect."
     else:
-        st.markdown(
-            '<div style="background:#f3f4f6;padding:1.2rem;border-radius:0.5rem;border-left:4px solid #9ca3af;">'
-            '<p style="margin:0;font-size:0.9rem;color:#6b7280;">📊 No significant beneficiaries at this tariff magnitude</p>'
-            "</div>",
-            unsafe_allow_html=True,
-        )
+        title = "📊 Limited beneficiary effect"
+        label = "The model detects a beneficiary effect, but it is small at this tariff magnitude."
+    if beneficiaries:
+        body = ", ".join(beneficiaries)
+    else:
+        body = "No country crosses the significance floor for this scenario."
+    st.info(f"**{title}**\n\n**{body}**\n\n{label}")
 
 with col_ben2:
-    diversion_pool = sum(scenario["trade_diversion"].values())
+    diversion_pool = sum(scenario.get("trade_diversion", {}).values())
     if diversion_pool > 0:
         pool_label = "Estimated trade diverted to alternatives" if b_type == "diversion" else "Estimated export revenue gain"
-        st.markdown(
-            f'<div style="background:#fef3c7;padding:1.2rem;border-radius:0.5rem;border-left:4px solid #f59e0b;">'
-            f'<p style="margin:0;font-size:0.8rem;color:#92400e;font-weight:600;margin-bottom:0.3rem;">💱 {pool_label}</p>'
-            f'<p style="margin:0;font-size:1.5rem;font-weight:800;color:#d97706;">${diversion_pool:.1f}B</p>'
-            f'<p style="margin:0.25rem 0 0 0;font-size:0.75rem;color:#b45309;">Per year, over the forecast horizon</p>'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+        st.metric(pool_label, f"${diversion_pool:.2f}B")
+        st.caption("Model estimate per year; not a live trade-flow measurement.")
     else:
-        st.markdown(
-            '<div style="background:#f3f4f6;padding:1.2rem;border-radius:0.5rem;border-left:4px solid #9ca3af;">'
-            '<p style="margin:0;font-size:0.9rem;color:#6b7280;">Trade flows remain near equilibrium — no significant diversion pool</p>'
-            "</div>",
-            unsafe_allow_html=True,
-        )
+        st.info("Trade flows remain near equilibrium — no incremental beneficiary pool.")
 
-# ── Teaching explanation ───────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("### 🎓 Economics Explanation")
-st.caption("Understand *why* these outputs are predicted — the mechanism behind the numbers.")
+st.caption("Understand why these outputs are predicted — the mechanism behind the numbers.")
 render_teaching_panel(teaching)
-
-# ── Analysis tabs ─────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("### 📈 Deep-Dive Analysis")
 overview_tab, forecast_tab, network_tab = st.tabs(["📊 Overview & Impact", "🔮 Forecast & Scenarios", "🕸️ Trade Network"])
-
 with overview_tab:
     render_overview_tab(scenario, scenario["impact_df"])
-
 with forecast_tab:
     render_forecast_tab(df, country, category, tariff_change, forecast_steps)
-
 with network_tab:
     render_network_tab(G, country, category, tariff_change, target_partner)
 
-# ── About ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
 with st.expander("📚 How this simulator works", expanded=False):
-    from utils import TRADE_ELASTICITY as TE
-    elasticity_val = TE.get(category, -0.7)
-    st.markdown(
-        f"""
-        **Core formula**: Export change (%) = Trade elasticity × Tariff change (%)
+    elasticity_val = TRADE_ELASTICITY.get(category, -0.7)
+    st.markdown(f"""
+    **Core formula**: Export change (%) = Trade elasticity × Tariff change (%)
 
-        - Selected category: **{category}** | Elasticity: **{elasticity_val:.1f}**
-        - Applied tariff: **{tariff_change:+.0f}%**
-        - Predicted trade response: **{elasticity_val * tariff_change:.1f}%** (before horizon adjustment)
+    - Selected category: **{category}** | Elasticity: **{elasticity_val:.1f}**
+    - Applied tariff: **{tariff_change:+.0f}%**
+    - Predicted trade response: **{elasticity_val * tariff_change:.1f}%** (before horizon adjustment)
 
-        **Elasticity values by category:**
-        | Category | Elasticity | Meaning |
-        |---|---|---|
-        | Semiconductors | -0.9 | Very sensitive — small tariff = large trade impact |
-        | Electronics | -0.8 | Highly sensitive |
-        | Machinery | -0.7 | Moderate sensitivity |
-        | Steel | -0.7 | Moderate sensitivity |
-        | Textiles | -0.6 | Somewhat sensitive |
-        | Chemicals | -0.5 | Less sensitive — harder to substitute |
-
-        **Trade network**: Uses category-specific bilateral multipliers so import dependency, export reach,
-        and bridge scores reflect the actual topology of that product's supply chain — not overall trade.
-
-        **Beneficiary threshold**: Only shown if the estimated trade diversion exceeds $0.5B per year.
-        Small tariff changes show no beneficiaries because the diversion is economically negligible.
-        """
-    )
+    **Beneficiary significance:** The ranking uses the scenario's own trade shock to set a small relative significance floor; it does not use a fixed $0.5B cutoff.
+    """)
