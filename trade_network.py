@@ -151,7 +151,10 @@ def build_network_figure(graph, metrics, title):
             size=sizes,
             color=[metric_map.loc[c, "pagerank"] for c in COUNTRIES],
             colorscale="Viridis", showscale=True,
-            colorbar=dict(title="PageRank", tickfont=dict(color=text), titlefont=dict(color=text)),
+            colorbar=dict(
+                title=dict(text="PageRank", font=dict(color=text)),
+                tickfont=dict(color=text),
+            ),
             line=dict(width=1, color=edge_color),
         ),
     )
