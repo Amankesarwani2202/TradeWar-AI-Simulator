@@ -14,6 +14,14 @@ def test_negative_thirty_percent_has_beneficiaries():
     result = build_country_scenario(sample_data(), "China", "Electronics", -30, "US")
     assert result["likely_beneficiaries"]
     assert "China" in result["likely_beneficiaries"]
+    assert result["beneficiary_status"] == "significant"
+
+
+def test_positive_tariff_has_trade_diversion_beneficiaries():
+    result = build_country_scenario(sample_data(), "China", "Electronics", 30, "US")
+    assert result["beneficiary_type"] == "diversion"
+    assert result["likely_beneficiaries"]
+    assert result["beneficiary_status"] == "significant"
 
 
 def test_beneficiary_score_changes_with_tariff_magnitude():
@@ -26,5 +34,6 @@ def test_beneficiary_score_changes_with_tariff_magnitude():
 
 def test_zero_tariff_has_no_beneficiary_gain():
     result = build_country_scenario(sample_data(), "China", "Electronics", 0, "US")
-    assert result["beneficiary_type"] == "baseline"
+    assert result["beneficiary_type"] == "none"
+    assert result["beneficiary_status"] == "baseline"
     assert result["trade_delta_bn"] == 0
