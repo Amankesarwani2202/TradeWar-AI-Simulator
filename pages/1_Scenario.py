@@ -6,8 +6,9 @@ from utils import (
     build_country_scenario, build_teaching_explanation, render_teaching_panel,
     apply_policy_shock_to_scenario, build_policy_shock_summary,
     render_scenario_summary_metrics, render_overview_tab,
-    render_forecast_tab, render_network_tab,
+    render_forecast_tab,
 )
+from scenario_network import render_scenario_network
 
 inject_css()
 np.random.seed(42)
@@ -148,7 +149,7 @@ with overview_tab:
 with forecast_tab:
     render_forecast_tab(df, country, category, tariff_change, forecast_steps)
 with network_tab:
-    render_network_tab(G, country, category, tariff_change, target_partner)
+    render_scenario_network(G, country, category, tariff_change, target_partner)
 
 st.markdown("---")
 with st.expander("📚 How this simulator works", expanded=False):
