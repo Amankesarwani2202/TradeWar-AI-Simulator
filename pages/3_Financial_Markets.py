@@ -2,6 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from utils import COUNTRY_PROFILES, inject_css
+from theme import apply_plotly_theme
 from market_data import MARKETS, download_history, summarize, live_timestamp
 
 inject_css()
@@ -34,7 +35,7 @@ if rows:
             close = pd.to_numeric(data["Close"], errors="coerce").dropna()
             if not close.empty:
                 fig.add_trace(go.Scatter(x=close.index, y=close / close.iloc[0] * 100, mode="lines", name=name))
-    fig.update_layout(title=f"Live market performance — {country}", yaxis_title="Indexed performance (start = 100)", template="plotly_dark", height=420)
+    fig = apply_plotly_theme(fig.update_layout(title=f"Live market performance — {country}", yaxis_title="Indexed performance (start = 100)", height=420))
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Select one or more markets to load live data.")
