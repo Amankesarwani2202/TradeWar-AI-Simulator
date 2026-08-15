@@ -5,7 +5,7 @@ from market_data import MARKETS, COMMON_ASSETS, download_history, summarize, liv
 st.set_page_config(page_title="Global Market Explorer", page_icon="🌐", layout="wide")
 
 st.title("🌐 Global Financial Market Explorer")
-st.caption("Live market data via Yahoo Finance. The directory provides major indices and selected large-cap assets; use the ticker search for any supported Yahoo Finance instrument.")
+st.caption("Live market data from the exchange/provider available for each instrument. Yahoo Finance is used for supported markets; Bangladesh DSE instruments use the DSE adapter. South Africa's Top 40 entry is an explicitly labelled ETF proxy.")
 st.caption(f"Last market refresh: {live_timestamp()} • Prices can be delayed depending on the exchange/data provider.")
 
 country = st.selectbox("Country / market", list(MARKETS))
