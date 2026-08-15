@@ -1,8 +1,7 @@
 """Tariff impact and beneficiary scoring.
 
-The score is deliberately continuous: changing a tariff by a few percentage
-points changes expected diversion and ranking rather than crossing an arbitrary
-absolute-dollar cutoff.
+The beneficiary model is continuous: tariff magnitude changes the size and
+ranking of beneficiaries rather than crossing an arbitrary hard dollar cutoff.
 """
 import numpy as np
 import pandas as pd
@@ -32,8 +31,6 @@ def build_country_scenario(df, country, category, tariff_change_pct, target_part
         if other == country:
             pct = effective_change
         elif other in alternatives and tariff_change_pct > 0:
-            # Diversion rises with the shock, but capacity limits prevent one
-            # country from absorbing the entire displaced flow.
             pct = -.35 * effective_change
         elif other == target_partner and tariff_change_pct > 0:
             pct = .10 * abs(effective_change)
@@ -49,8 +46,6 @@ def build_country_scenario(df, country, category, tariff_change_pct, target_part
 
     scores = {}
     if tariff_change_pct > 0 and alternatives:
-        # The pool grows smoothly with tariff magnitude. Supplier capacity and
-        # diversification are used instead of a hard dollar threshold.
         pool = abs(delta) * np.clip(.30 + abs(tariff_change_pct) / 100 * .50, .30, .85)
         raw_weights = []
         for rank, alt in enumerate(alternatives):
@@ -59,21 +54,28 @@ def build_country_scenario(df, country, category, tariff_change_pct, target_part
             raw_weights.append((alt, (1 / (rank + 1)) * capacity))
         total = sum(weight for _, weight in raw_weights) or 1
         scores = {alt: pool * weight / total for alt, weight in raw_weights}
-        beneficiary_type = "trade diversion"
+        beneficiary_type = "diversion"
     elif tariff_change_pct < 0:
-        # A tariff reduction primarily benefits the exporter and importing
-        # consumers, with smaller indirect gains for alternative suppliers.
         scores[country] = abs(delta) * .60
         if target_partner != country:
             scores[target_partner] = abs(delta) * .20
         for rank, alt in enumerate(alternatives[:3]):
             scores[alt] = abs(delta) * (.08 / (rank + 1))
-        beneficiary_type = "market-access gain"
+        beneficiary_type = "gain"
     else:
-        beneficiary_type = "baseline"
+        beneficiary_type = "none"
 
     ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-    beneficiaries = [country_name for country_name, score in ranked if score > 1e-6][:3]
+    # Significance is relative to the scenario impact, not a fixed dollar cutoff.
+    significance_floor = max(0.05, abs(delta) * 0.01)
+    beneficiaries = [name for name, score in ranked if score >= significance_floor][:3]
+    if tariff_change_pct == 0:
+        beneficiary_status = "baseline"
+    elif beneficiaries:
+        beneficiary_status = "significant"
+    else:
+        beneficiary_status = "limited"
+
     return {
         "country": country, "category": category, "target_partner": target_partner,
         "baseline_export_bn": round(base, 2), "predicted_export_bn": round(predicted, 2),
@@ -81,5 +83,6 @@ def build_country_scenario(df, country, category, tariff_change_pct, target_part
         "risk_score": round(min(100, 12 + abs(effective_change) * 1.6), 1),
         "trade_diversion": {k: round(v, 3) for k, v in scores.items()},
         "likely_beneficiaries": beneficiaries, "beneficiary_type": beneficiary_type,
+        "beneficiary_status": beneficiary_status, "beneficiary_threshold_bn": round(significance_floor, 3),
         "impact_df": impact, "projection_horizon": projection_horizon,
     }
