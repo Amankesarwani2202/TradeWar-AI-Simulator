@@ -31,7 +31,7 @@ def apply_plotly_theme(fig):
         template="plotly_dark" if dark else "plotly_white",
         paper_bgcolor=colors["background"], plot_bgcolor=colors["background"],
         font=dict(color=colors["text"]), title=dict(font=dict(color=colors["text"])),
-        legend=dict(font=dict(color=colors["text"]),),
+        legend=dict(font=dict(color=colors["text"])),
         hoverlabel=dict(bgcolor=colors["secondary"], font=dict(color=colors["text"]), bordercolor=colors["border"]),
     )
     fig.update_xaxes(title_font=dict(color=colors["text"]), tickfont=dict(color=colors["text"]), gridcolor=colors["grid"], zerolinecolor=colors["grid"], linecolor=colors["border"], color=colors["text"])
@@ -71,11 +71,25 @@ def inject_css():
         [style*="border:#e2e8f0"], [style*="border: #e2e8f0"], [style*="border:1px solid #e2e8f0"], [style*="border: 1px solid #e2e8f0"], [style*="border:1px solid #E2E8F0"], [style*="border: 1px solid #E2E8F0"] {{ border-color:{colors['border']} !important; }}
         [data-testid="stAlert"] {{ color:{colors['text']} !important; }}
         [data-testid="stAlert"] p,[data-testid="stAlert"] span,[data-testid="stAlert"] strong {{ color:inherit !important; }}
-        .js-plotly-plot .plotly .main-svg,.js-plotly-plot .plotly .bg,.js-plotly-plot .plotly .plotbg,.js-plotly-plot .plotly .paperbg {{ background:{colors['background']} !important; fill:{colors['background']} !important; }}
-        .js-plotly-plot .plotly svg text,.js-plotly-plot .plotly .gtitle,.js-plotly-plot .plotly .xtitle,.js-plotly-plot .plotly .ytitle,.js-plotly-plot .plotly .xtick text,.js-plotly-plot .plotly .ytick text,.js-plotly-plot .plotly .legendtext,.js-plotly-plot .plotly .cbtitle,.js-plotly-plot .plotly .cbaxis text {{ fill:{colors['text']} !important; }}
-        .js-plotly-plot .plotly .gridlayer path,.js-plotly-plot .plotly .zerolinelayer path,.js-plotly-plot .plotly .xaxislayer-above path,.js-plotly-plot .plotly .yaxislayer-above path {{ stroke:{colors['border']} !important; }}
+        /* Do not set SVG fill/background here: Plotly uses child SVG paths for
+           node markers and edges, and forcing fill on the parent can hide them. */
+        .js-plotly-plot .plotly svg text,
+        .js-plotly-plot .plotly .gtitle,
+        .js-plotly-plot .plotly .xtitle,
+        .js-plotly-plot .plotly .ytitle,
+        .js-plotly-plot .plotly .xtick text,
+        .js-plotly-plot .plotly .ytick text,
+        .js-plotly-plot .plotly .legendtext,
+        .js-plotly-plot .plotly .cbtitle,
+        .js-plotly-plot .plotly .cbaxis text {{ fill:{colors['text']} !important; }}
+        .js-plotly-plot .plotly .gridlayer path,
+        .js-plotly-plot .plotly .zerolinelayer path,
+        .js-plotly-plot .plotly .xaxislayer-above path,
+        .js-plotly-plot .plotly .yaxislayer-above path {{ stroke:{colors['border']} !important; }}
         [data-testid="stDataFrame"] {{ color:{colors['text']} !important; }}
         [data-testid="stDataFrame"] iframe {{ color-scheme:{'dark' if dark else 'light'}; }}
+        /* Prevent an empty chart wrapper from creating a large visual gap. */
+        [data-testid="stPlotlyChart"] {{ margin-bottom:0 !important; }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
