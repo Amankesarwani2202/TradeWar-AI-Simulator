@@ -124,7 +124,7 @@ def classify_demographic(profile):
 
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
-st.sidebar.markdown("<h2 style='font-size:1.4rem;color:#1f2937;margin-bottom:1rem;'>👥 Demographic Settings</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='font-size:1.4rem;margin-bottom:1rem;'>👥 Demographic Settings</h2>", unsafe_allow_html=True)
 
 country = st.sidebar.selectbox("Select country", COUNTRIES)
 profile = COUNTRY_PROFILES.get(country, {})
@@ -146,7 +146,7 @@ forecast_years = st.sidebar.slider("Forecast horizon (years)", min_value=5, max_
 # ── Main content ─────────────────────────────────────────────────────────────
 st.title("👥 Demographics")
 st.markdown(
-    '<p style="font-size:1.1rem;color:#666;margin-top:-1rem;margin-bottom:1.5rem;">'
+    '<p class="tw-muted" style="font-size:1.1rem;margin-top:-1rem;margin-bottom:1.5rem;">'
     "Population structure, workforce composition, sector breakdowns, and demographic forecasts"
     "</p>",
     unsafe_allow_html=True,
@@ -161,10 +161,10 @@ participation = round((labor / pop * 100), 1) if pop > 0 else 0
 
 # Summary banner
 st.markdown(
-    f'<div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:0.5rem;border:1px solid #e2e8f0;border-left:4px solid #16a34a;margin-bottom:1.5rem;">'
+    f'<div class="tw-panel">'
     f'<p style="margin:0;font-size:0.72rem;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:0.06em;">Demographic Profile</p>'
-    f'<p style="margin:0.2rem 0 0 0;font-size:0.98rem;font-weight:700;color:#0f172a;">{country}</p>'
-    f'<p style="margin:0.3rem 0 0 0;font-size:0.82rem;color:#64748b;">'
+    f'<p style="margin:0.2rem 0 0 0;font-size:0.98rem;font-weight:700;">{country}</p>'
+    f'<p class="tw-muted" style="margin:0.3rem 0 0 0;font-size:0.82rem;">'
     f'Population: {pop:,}M &nbsp;·&nbsp; Labour force: {labor:,}M &nbsp;·&nbsp; Median age: {age} yrs &nbsp;·&nbsp; '
     f'Urbanisation: {urban}% &nbsp;·&nbsp; Labour participation: {participation:.0f}%'
     f'</p>'
@@ -191,7 +191,7 @@ st.markdown("<hr style='margin:1.5rem 0;'/>", unsafe_allow_html=True)
 # Demographic phase classification
 phase, phase_desc, phase_color, phase_border = classify_demographic(profile)
 st.markdown(
-    f'<div style="background:{phase_color};padding:1.2rem;border-radius:0.5rem;border-left:4px solid {phase_border};margin-bottom:1.5rem;">'
+    f'<div class="tw-panel">'
     f'<p style="margin:0 0 0.25rem 0;font-weight:700;font-size:1rem;">📊 Demographic phase: {phase}</p>'
     f'<p style="margin:0;font-size:0.9rem;line-height:1.6;">{phase_desc}</p>'
     f"</div>",
@@ -213,8 +213,8 @@ with overview_tab:
         working_age = age_dist.get("15-29", 0) + age_dist.get("30-44", 0) + age_dist.get("45-59", 0)
         dependency_ratio = round((age_dist.get("0-14", 0) + age_dist.get("60+", 0)) / max(working_age, 1) * 100, 1)
         st.markdown(
-            f'<div style="background:#f8fafc;padding:1rem;border-radius:0.5rem;border:1px solid #e2e8f0;">'
-            f'<p style="margin:0;font-size:0.9rem;color:#475569;">Dependency ratio: <strong>{dependency_ratio:.0f}%</strong> '
+            f'<div class="tw-panel">'
+            f'<p style="margin:0;font-size:0.9rem;">Dependency ratio: <strong>{dependency_ratio:.0f}%</strong> '
             f'(dependants per 100 working-age people). '
             f'{"High dependency = greater social spending burden." if dependency_ratio > 55 else "Moderate dependency = manageable support ratio."}'
             f'</p></div>',
@@ -229,7 +229,7 @@ with overview_tab:
             pct_key = f"{sector.lower()}_sector_pct"
             pct = profile.get(pct_key, 0)
             st.markdown(
-                f'<div style="margin-bottom:0.5rem;padding:0.6rem 0.8rem;background:#f8fafc;border-radius:0.4rem;border-left:3px solid #94a3b8;">'
+                f'<div class="tw-hint" style="margin-bottom:0.5rem;">'
                 f'<p style="margin:0;font-size:0.85rem;"><strong>{sector} ({pct}%)</strong>: {desc}</p>'
                 f"</div>",
                 unsafe_allow_html=True,
@@ -242,27 +242,21 @@ with overview_tab:
 
     with col_v1:
         if agri > 30:
-            agri_text = f"🌾 **High agricultural workforce ({agri:.0f}%)** — Commodity tariffs translate directly to rural job losses and urban migration pressure. Politically sensitive for governments."
-            a_color, a_border = "#fee2e2", "#ef4444"
+            agri_text = f"🌾 <strong>High agricultural workforce ({agri:.0f}%)</strong> — Commodity tariffs translate directly to rural job losses and urban migration pressure. Politically sensitive for governments."
         elif agri < 5:
-            agri_text = f"✓ **Low agricultural exposure ({agri:.0f}%)** — Manufacturing and service tariffs dominate. Less rural vulnerability; shock absorbed in urban labour markets."
-            a_color, a_border = "#dcfce7", "#22c55e"
+            agri_text = f"✓ <strong>Low agricultural exposure ({agri:.0f}%)</strong> — Manufacturing and service tariffs dominate. Less rural vulnerability; shock absorbed in urban labour markets."
         else:
-            agri_text = f"⚠️ **Moderate agricultural sector ({agri:.0f}%)** — Balanced exposure. Both primary commodity and manufacturing tariffs have meaningful workforce effects."
-            a_color, a_border = "#fef3c7", "#f59e0b"
-        st.markdown(f'<div style="background:{a_color};padding:1.2rem;border-radius:0.5rem;border-left:4px solid {a_border};"><p style="margin:0;font-size:0.9rem;line-height:1.6;">{agri_text}</p></div>', unsafe_allow_html=True)
+            agri_text = f"⚠️ <strong>Moderate agricultural sector ({agri:.0f}%)</strong> — Balanced exposure. Both primary commodity and manufacturing tariffs have meaningful workforce effects."
+        st.markdown(f'<div class="tw-panel"><p style="margin:0;font-size:0.9rem;line-height:1.6;">{agri_text}</p></div>', unsafe_allow_html=True)
 
     with col_v2:
         if age > 42:
-            age_text = "👴 **Aging workforce** — Less adaptive to structural job displacement. Retraining is costly and slow. Pension systems under pressure as worker-to-retiree ratio falls."
-            ag_color, ag_border = "#fee2e2", "#ef4444"
+            age_text = "👴 <strong>Aging workforce</strong> — Less adaptive to structural job displacement. Retraining is costly and slow. Pension systems under pressure as worker-to-retiree ratio falls."
         elif age < 32:
-            age_text = "👶 **Young workforce** — High labour supply flexibility. Faster retraining capacity. But youth unemployment is acutely sensitive to trade-related job losses."
-            ag_color, ag_border = "#dcfce7", "#22c55e"
+            age_text = "👶 <strong>Young workforce</strong> — High labour supply flexibility. Faster retraining capacity. But youth unemployment is acutely sensitive to trade-related job losses."
         else:
-            age_text = "👨 **Working-age peak** — Standard adjustment trajectory. Moderate retraining feasibility. Demographic dividend still available if sector transitions are managed."
-            ag_color, ag_border = "#fef3c7", "#f59e0b"
-        st.markdown(f'<div style="background:{ag_color};padding:1.2rem;border-radius:0.5rem;border-left:4px solid {ag_border};"><p style="margin:0;font-size:0.9rem;line-height:1.6;">{age_text}</p></div>', unsafe_allow_html=True)
+            age_text = "👨 <strong>Working-age peak</strong> — Standard adjustment trajectory. Moderate retraining feasibility. Demographic dividend still available if sector transitions are managed."
+        st.markdown(f'<div class="tw-panel"><p style="margin:0;font-size:0.9rem;line-height:1.6;">{age_text}</p></div>', unsafe_allow_html=True)
 
     with st.expander("🎓 Teaching note: Demographics and trade vulnerability", expanded=False):
         st.markdown(
@@ -415,9 +409,9 @@ with compare_tab:
     phase_b, _, c_b, b_b = classify_demographic(compare_profile)
     cmp_col1, cmp_col2 = st.columns(2)
     with cmp_col1:
-        st.markdown(f'<div style="background:{c_a};padding:1rem;border-radius:0.5rem;border-left:4px solid {b_a};"><p style="margin:0;font-weight:600;">{country}: {phase_a}</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="tw-panel"><p style="margin:0;font-weight:600;">{country}: {phase_a}</p></div>', unsafe_allow_html=True)
     with cmp_col2:
-        st.markdown(f'<div style="background:{c_b};padding:1rem;border-radius:0.5rem;border-left:4px solid {b_b};"><p style="margin:0;font-weight:600;">{compare_country}: {phase_b}</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="tw-panel"><p style="margin:0;font-weight:600;">{compare_country}: {phase_b}</p></div>', unsafe_allow_html=True)
 
     with st.expander("🎓 Teaching note: Why demographic comparison matters for trade", expanded=False):
         st.markdown(

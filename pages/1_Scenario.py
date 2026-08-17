@@ -74,12 +74,12 @@ tariff_change = st.sidebar.slider("Tariff change (%)", min_value=-30, max_value=
 forecast_steps = st.sidebar.slider("Forecast horizon (years)", min_value=1, max_value=5, value=3, step=1)
 
 if tariff_change > 0:
-    direction_hint, hint_color = "Tariff increase — exporter loses", "#ef4444"
+    direction_hint, hint_color = "Tariff increase — exporter loses", "#f87171"
 elif tariff_change < 0:
-    direction_hint, hint_color = "Tariff reduction — exporter gains", "#16a34a"
+    direction_hint, hint_color = "Tariff reduction — exporter gains", "#4ade80"
 else:
-    direction_hint, hint_color = "No change from baseline", "#6b7280"
-st.sidebar.markdown(f'<div style="background:#f8fafc;padding:.5rem .75rem;border-radius:.4rem;border-left:3px solid {hint_color};"><p style="margin:0;font-size:.82rem;font-weight:600;color:{hint_color};">{direction_hint}</p></div>', unsafe_allow_html=True)
+    direction_hint, hint_color = "No change from baseline", "#94a3b8"
+st.sidebar.markdown(f'<div class="tw-hint" style="border-left:3px solid {hint_color};"><p style="margin:0;font-size:.82rem;font-weight:600;color:{hint_color};">{direction_hint}</p></div>', unsafe_allow_html=True)
 
 st.sidebar.divider()
 st.sidebar.markdown("**Optional: Historical shock overlay**")
@@ -87,11 +87,11 @@ historical_event = st.sidebar.selectbox("Historical policy shock", ["None", "Pos
 shock_pct = st.sidebar.slider("Shock intensity (%)", min_value=-20, max_value=20, value=5, step=1)
 
 st.title("⚙️ Custom Scenario Simulator")
-st.markdown('<p style="font-size:1.05rem;color:#6b7280;margin-top:-.75rem;margin-bottom:1.5rem;">Model how tariff changes ripple through supply chains, forecasts, and trade networks — with step-by-step economic explanations</p>', unsafe_allow_html=True)
+st.markdown('<p class="tw-muted" style="font-size:1.05rem;margin-top:-.75rem;margin-bottom:1.5rem;">Model how tariff changes ripple through supply chains, forecasts, and trade networks — with step-by-step economic explanations</p>', unsafe_allow_html=True)
 tariff_direction_word = "increase" if tariff_change > 0 else "reduction" if tariff_change < 0 else "no change"
-_ctx_border = "#ef4444" if tariff_change > 0 else "#16a34a" if tariff_change < 0 else "#6b7280"
+_ctx_border = "#f87171" if tariff_change > 0 else "#4ade80" if tariff_change < 0 else "#94a3b8"
 raise_word = "raises" if tariff_change > 0 else "cuts" if tariff_change < 0 else "keeps"
-context_html = f'<div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:.5rem;border:1px solid #e2e8f0;border-left:4px solid {_ctx_border};margin-bottom:1.5rem;"><p style="margin:0;font-size:.95rem;font-weight:600;color:#0f172a;">{abs(tariff_change)}% tariff {tariff_direction_word} &nbsp;·&nbsp; {country} → {target_partner} &nbsp;·&nbsp; {category}</p><p style="margin:.3rem 0 0;font-size:.82rem;color:#64748b;">{target_partner} {raise_word} tariffs on {country}\'s {category} by {abs(tariff_change)}%. Trade elasticity applied across all 10 economies.</p></div>'
+context_html = f'<div class="tw-panel"><p style="margin:0;font-size:.95rem;font-weight:600;">{abs(tariff_change)}% tariff {tariff_direction_word} &nbsp;·&nbsp; {country} → {target_partner} &nbsp;·&nbsp; {category}</p><p class="tw-muted" style="margin:.3rem 0 0;font-size:.82rem;">{target_partner} {raise_word} tariffs on {country}\'s {category} by {abs(tariff_change)}%. Trade elasticity applied across all 10 economies.</p></div>'
 st.markdown(context_html, unsafe_allow_html=True)
 
 scenario = build_country_scenario(df, country, category, tariff_change, target_partner, projection_horizon=forecast_steps)
@@ -102,7 +102,7 @@ st.markdown("### 📊 Scenario Summary")
 render_scenario_summary_metrics(scenario)
 st.markdown("<br/>", unsafe_allow_html=True)
 emoji = "📉" if tariff_change > 0 else "📈" if tariff_change < 0 else "➡️"
-st.markdown(f'<div style="background:#f8fafc;padding:1.25rem 1.5rem;border-radius:.5rem;border:1px solid #e2e8f0;border-left:4px solid {_ctx_border};"><p style="margin:0;font-size:.88rem;color:#374151;"><strong>{abs(tariff_change)}% tariff {tariff_direction_word}</strong> on <strong>{country}\'s {category}</strong> exports to <strong>{target_partner}</strong></p><p style="margin:.6rem 0 0;font-size:1.1rem;font-weight:700;color:#0f172a;">{emoji} Predicted exports: <span style="color:#64748b;">${scenario["baseline_export_bn"]:.1f}B</span> → <span style="color:#0f172a;">${scenario["predicted_export_bn"]:.1f}B</span><span style="font-size:.85rem;font-weight:400;color:#64748b;"> ({scenario["trade_change_pct"]:+.1f}% | ${scenario["trade_delta_bn"]:+.1f}B)</span></p></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="tw-panel"><p style="margin:0;font-size:.88rem;"><strong>{abs(tariff_change)}% tariff {tariff_direction_word}</strong> on <strong>{country}\'s {category}</strong> exports to <strong>{target_partner}</strong></p><p style="margin:.6rem 0 0;font-size:1.1rem;font-weight:700;">{emoji} Predicted exports: <span class="tw-muted">${scenario["baseline_export_bn"]:.1f}B</span> → ${scenario["predicted_export_bn"]:.1f}B<span class="tw-muted" style="font-size:.85rem;font-weight:400;"> ({scenario["trade_change_pct"]:+.1f}% | ${scenario["trade_delta_bn"]:+.1f}B)</span></p></div>', unsafe_allow_html=True)
 if historical_event != "None":
     st.info(f"⚙️ **Historical shock also applied:** {build_policy_shock_summary(historical_event, shock_pct)}")
 

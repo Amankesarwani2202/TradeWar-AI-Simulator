@@ -73,7 +73,7 @@ COUNTERFACTUAL_EVENTS = {
 }
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
-st.sidebar.markdown("<h2 style='font-size:1.3rem;color:#1f2937;margin-bottom:0.75rem;'>🔄 Historical Event</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='font-size:1.3rem;margin-bottom:0.75rem;'>🔄 Historical Event</h2>", unsafe_allow_html=True)
 st.sidebar.info(
     "**What is a counterfactual?**\n\n"
     "A counterfactual asks: *what if a key decision had gone differently?* "
@@ -92,7 +92,7 @@ tariff_change = cf["tariff_change"]
 # ── Main content ─────────────────────────────────────────────────────────────
 st.title("🔄 Historical Counterfactual Analyzer")
 st.markdown(
-    '<p style="font-size:1.05rem;color:#6b7280;margin-top:-0.75rem;margin-bottom:1.5rem;">'
+    '<p class="tw-muted" style="font-size:1.05rem;margin-top:-0.75rem;margin-bottom:1.5rem;">'
     "Explore how alternative historical decisions would have reshaped trade flows, forecasts, and supply chains"
     "</p>",
     unsafe_allow_html=True,
@@ -102,20 +102,20 @@ st.warning("⚠️ **Disclaimer**: All counterfactual scenarios are illustrative
 
 # ── Event card ────────────────────────────────────────────────────────────────
 st.markdown(
-    f'<div style="background:#f8fafc;padding:1.25rem 1.5rem;border-radius:0.5rem;border:1px solid #e2e8f0;border-left:4px solid #7c3aed;margin:1.5rem 0;">'
+    f'<div class="tw-panel" style="margin:1.5rem 0;">'
     f'<p style="margin:0;font-size:0.72rem;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:0.06em;">Counterfactual · {cf["year_context"]}</p>'
-    f'<p style="margin:0.2rem 0 0.75rem 0;font-size:1rem;font-weight:700;color:#0f172a;">{selected_event}</p>'
+    f'<p style="margin:0.2rem 0 0.75rem 0;font-size:1rem;font-weight:700;">{selected_event}</p>'
     f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">'
-    f'<div style="background:#fff;padding:0.8rem;border-radius:0.4rem;border:1px solid #e2e8f0;">'
-    f'<p style="margin:0;font-size:0.7rem;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:0.3rem;">What actually happened</p>'
-    f'<p style="margin:0;font-size:0.85rem;color:#374151;line-height:1.5;">{cf["what_really_happened"]}</p>'
+    f'<div class="tw-panel-inner">'
+    f'<p class="tw-muted" style="margin:0;font-size:0.7rem;font-weight:600;text-transform:uppercase;margin-bottom:0.3rem;">What actually happened</p>'
+    f'<p style="margin:0;font-size:0.85rem;line-height:1.5;">{cf["what_really_happened"]}</p>'
     f'</div>'
-    f'<div style="background:#faf5ff;padding:0.8rem;border-radius:0.4rem;border:1px solid #ddd6fe;">'
+    f'<div class="tw-panel-inner" style="border-color:#7c3aed40;">'
     f'<p style="margin:0;font-size:0.7rem;font-weight:600;color:#7c3aed;text-transform:uppercase;margin-bottom:0.3rem;">The alternative we\'re testing</p>'
-    f'<p style="margin:0;font-size:0.85rem;color:#374151;line-height:1.5;">{cf["what_if"]}</p>'
+    f'<p style="margin:0;font-size:0.85rem;line-height:1.5;">{cf["what_if"]}</p>'
     f'</div>'
     f'</div>'
-    f'<p style="margin:0.75rem 0 0 0;font-size:0.85rem;color:#475569;font-style:italic;">Key question: {cf["key_question"]}</p>'
+    f'<p class="tw-muted" style="margin:0.75rem 0 0 0;font-size:0.85rem;font-style:italic;">Key question: {cf["key_question"]}</p>'
     f'</div>',
     unsafe_allow_html=True,
 )
@@ -131,16 +131,16 @@ render_scenario_summary_metrics(scenario)
 # Outcome box
 emoji = "📈" if tariff_change < 0 else "📉"
 direction_word = "lower" if tariff_change < 0 else "higher"
-_cf_border = "#16a34a" if tariff_change < 0 else "#ef4444"
+_cf_border = "#4ade80" if tariff_change < 0 else "#f87171"
 st.markdown(
-    f'<div style="background:#f8fafc;padding:1.1rem 1.4rem;border-radius:0.5rem;border:1px solid #e2e8f0;border-left:4px solid {_cf_border};margin-top:1rem;">'
-    f'<p style="margin:0;font-size:0.85rem;color:#374151;">'
+    f'<div class="tw-panel" style="margin-top:1rem;">'
+    f'<p style="margin:0;font-size:0.85rem;">'
     f'<strong>Counterfactual ({cf["year_context"]}):</strong> {abs(tariff_change)}% {direction_word} tariffs on {country}\'s {category} to {target_partner}'
     f'</p>'
-    f'<p style="margin:0.5rem 0 0 0;font-size:1.05rem;font-weight:700;color:#0f172a;">'
-    f'{emoji} Alternative path: <span style="color:#64748b;">${scenario["baseline_export_bn"]:.1f}B</span> → '
-    f'<span style="color:#0f172a;">${scenario["predicted_export_bn"]:.1f}B</span>'
-    f'<span style="font-size:0.85rem;font-weight:400;color:#64748b;"> ({scenario["trade_change_pct"]:+.1f}%)</span>'
+    f'<p style="margin:0.5rem 0 0 0;font-size:1.05rem;font-weight:700;">'
+    f'{emoji} Alternative path: <span class="tw-muted">${scenario["baseline_export_bn"]:.1f}B</span> → '
+    f'${scenario["predicted_export_bn"]:.1f}B'
+    f'<span class="tw-muted" style="font-size:0.85rem;font-weight:400;"> ({scenario["trade_change_pct"]:+.1f}%)</span>'
     f'</p>'
     f'</div>',
     unsafe_allow_html=True,
@@ -154,8 +154,8 @@ render_teaching_panel(teaching)
 
 st.markdown(
     f"""
-    <div style="background:#fef3c7;padding:1rem 1.2rem;border-radius:0.5rem;border-left:4px solid #f59e0b;margin-top:1rem;">
-        <p style="margin:0;font-size:0.9rem;color:#92400e;">
+    <div class="tw-panel" style="margin-top:1rem;">
+        <p style="margin:0;font-size:0.9rem;">
         <strong>Counterfactual reasoning caveat:</strong>
         Real economies respond to policy changes through <em>many channels simultaneously</em>
         — investment flows, political responses, technology adoption, and consumer behaviour —

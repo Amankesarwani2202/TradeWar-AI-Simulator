@@ -106,7 +106,10 @@ def render_scenario_summary_metrics(s):
     a,b,c,d=st.columns(4);a.metric('Exporter',s['country']);b.metric('Category',s['category']);c.metric('Predicted export change',f"{s['trade_change_pct']:+.1f}%",delta=f"${s['trade_delta_bn']:+.1f}B");d.metric('Trade disruption risk',f"{s['risk_score']:.0f}/100")
 def render_overview_tab(s,impact):
     st.dataframe(impact[['country','baseline_export_bn','predicted_export_bn','change_pct','change_bn']],use_container_width=True,hide_index=True)
-    fig=px.bar(impact,x='country',y='change_bn',color='change_bn',color_continuous_scale=['#ef4444','#f3f4f6','#10b981'])
+    from theme import theme_colors
+    tc=theme_colors()
+    fig=px.bar(impact,x='country',y='change_bn',color='change_bn',color_continuous_scale=['#ef4444',tc['secondary'],'#10b981'],title=f"Trade Impact by Country — {s['country']} {s['category']}")
+    fig.update_layout(height=420)
     st.plotly_chart(apply_plotly_theme(fig),use_container_width=True)
 def render_forecast_tab(df,country,category,tariff,steps):
     fig,_,_=build_forecast_chart(df,country,category,tariff,steps);st.plotly_chart(fig,use_container_width=True)
