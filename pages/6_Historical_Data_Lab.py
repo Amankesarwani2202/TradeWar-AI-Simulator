@@ -8,8 +8,10 @@ from historical_analysis import (
     sample_data, prepare, validate_data, render_dataset_metrics, make_plot,
     fit_ols, forecast_arima, elasticity_prediction, did_analysis,
 )
-from theme import inject_css
+from theme import inject_css, apply_plotly_theme
 
+# Use the existing application theme system so this new page follows the
+# same light/dark contrast and visual language as every existing page.
 inject_css()
 st.title("🔬 Historical Data & Economics Lab")
 st.markdown("Upload or enter real historical observations, test economic relationships, forecast exports, and generate research-ready results — without leaving the app.")
@@ -54,14 +56,15 @@ with c1:
 with c2:
     st.download_button("⬇️ Download sample template", sample_data().to_csv(index=False).encode("utf-8"), "trade_analysis_template.csv", "text/csv", use_container_width=True)
 
-st.plotly_chart(make_plot(df), use_container_width=True)
+st.plotly_chart(apply_plotly_theme(make_plot(df)), use_container_width=True)
 
 st.divider()
 st.subheader("2. Descriptive statistics")
 st.dataframe(df.describe(include="all").T, use_container_width=True)
 if len(df) >= 3:
     numeric = df.select_dtypes(include=np.number)
-    st.plotly_chart(px.imshow(numeric.corr(), text_auto=True, aspect="auto", title="Correlation matrix"), use_container_width=True)
+    correlation_fig = px.imshow(numeric.corr(), text_auto=True, aspect="auto", title="Correlation matrix")
+    st.plotly_chart(apply_plotly_theme(correlation_fig), use_container_width=True)
 
 st.divider()
 st.subheader("3. Econometric model")
@@ -90,7 +93,7 @@ if predictors:
         fig.add_trace(go.Scatter(y=pred_df["exports_bn_usd"], mode="lines+markers", name="Actual"))
         fig.add_trace(go.Scatter(y=pred_df["predicted"], mode="lines+markers", name="OLS predicted"))
         fig.update_layout(title="Actual vs OLS predicted exports", xaxis_title="Observation", yaxis_title="Exports ($B)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
     except Exception as exc:
         st.error(f"Model could not be estimated: {exc}")
 else:
@@ -122,14 +125,14 @@ try:
     fig.add_trace(go.Scatter(x=future_years, y=ci.iloc[:, 1], mode="lines", line=dict(width=0), showlegend=False))
     fig.add_trace(go.Scatter(x=future_years, y=ci.iloc[:, 0], mode="lines", fill="tonexty", line=dict(width=0), name="95% interval"))
     fig.update_layout(title="Export forecast", xaxis_title="Year", yaxis_title="Exports ($B)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
     st.dataframe(pd.DataFrame({"year": future_years, "forecast_exports_bn_usd": mean.values, "lower_95": ci.iloc[:,0].values, "upper_95": ci.iloc[:,1].values}), use_container_width=True)
 except Exception as exc:
     st.warning(f"ARIMA forecast unavailable: {exc}")
 
 st.divider()
 st.subheader("6. Trade-war event / Difference-in-Differences")
-st.markdown("For a real intervention analysis, provide a defensible treatment/control definition. The simple mode below is a teaching implementation; it classifies high-tariff observations as treated and should not be presented as causal proof without a proper control group.")
+st.markdown("For a real intervention analysis, provide a defensible treatment/control definition. The simple mode below is a teaching implementation; it classifies high-tariff observations as treated and should not be presented as causal proof without a proper control group and parallel-trends checks.")
 start_year = st.number_input("Policy/intervention start year", int(df.year.min()) if len(df) else 2000, int(df.year.max()) if len(df) else 2025, min(2018, int(df.year.max())) if len(df) else 2018)
 if st.button("Run DiD analysis", use_container_width=True):
     try:
