@@ -1,11 +1,12 @@
-import io
 import numpy as np
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 import plotly.graph_objects as go
+import statsmodels.api as sm
 from historical_analysis import (
     sample_data, prepare, validate_data, render_dataset_metrics, make_plot,
-    fit_ols, forecast_arima, elasticity_prediction, model_metrics, did_analysis,
+    fit_ols, forecast_arima, elasticity_prediction, did_analysis,
 )
 from theme import inject_css
 
@@ -60,7 +61,7 @@ st.subheader("2. Descriptive statistics")
 st.dataframe(df.describe(include="all").T, use_container_width=True)
 if len(df) >= 3:
     numeric = df.select_dtypes(include=np.number)
-    st.plotly_chart(numeric.corr().pipe(lambda c: __import__('plotly.express').express.imshow(c, text_auto=True, aspect="auto", title="Correlation matrix")), use_container_width=True)
+    st.plotly_chart(px.imshow(numeric.corr(), text_auto=True, aspect="auto", title="Correlation matrix"), use_container_width=True)
 
 st.divider()
 st.subheader("3. Econometric model")
@@ -77,12 +78,12 @@ if predictors:
         a.metric("R²", f"{model.rsquared:.3f}")
         b.metric("Adjusted R²", f"{model.rsquared_adj:.3f}")
         c.metric("Observations", int(model.nobs))
-        bse = model.bse.get("tariff_pct", np.nan)
         d.metric("Tariff coefficient", f"{model.params.get('tariff_pct', np.nan):.4f}")
         st.markdown("**Interpretation:** the tariff coefficient estimates the expected change in exports ($B) associated with a one-percentage-point tariff change, holding the selected controls constant.")
         st.dataframe(pd.DataFrame({"coefficient": model.params, "std_error": model.bse, "p_value": model.pvalues, "ci_low": model.conf_int()[0], "ci_high": model.conf_int()[1]}), use_container_width=True)
-        st.expander("Full statistical summary").write(model.summary())
-        fitted = model.predict(sm_add := __import__('statsmodels.api').api.add_constant(model_data[predictors], has_constant="add"))
+        with st.expander("Full statistical summary"):
+            st.text(model.summary().as_text())
+        fitted = model.predict(sm.add_constant(model_data[predictors], has_constant="add"))
         pred_df = model_data[["exports_bn_usd"]].copy()
         pred_df["predicted"] = fitted.values
         fig = go.Figure()
@@ -104,7 +105,8 @@ with c1: tariff_shock = st.number_input("Counterfactual tariff change (%)", -90.
 with c2: elasticity = st.number_input("Demand/trade elasticity", -5.0, 5.0, -0.7, 0.1)
 with c3: st.metric("Latest observed exports", f"${last_exports:.2f}B")
 predicted = elasticity_prediction(last_exports, tariff_shock, elasticity)
-st.success(f"**Elasticity counterfactual:** ${last_exports:.2f}B → **${predicted:.2f}B** ({(predicted / last_exports - 1) * 100:+.2f}%).")
+pct_change = (predicted / last_exports - 1) * 100 if last_exports else 0
+st.success(f"**Elasticity counterfactual:** ${last_exports:.2f}B → **${predicted:.2f}B** ({pct_change:+.2f}%).")
 st.latex(r"\frac{\Delta Q}{Q}=\epsilon\frac{\Delta P}{P}")
 st.caption("This is a partial-equilibrium first-order approximation. It does not automatically capture retaliation, investment relocation, exchange-rate responses, political effects, or general-equilibrium feedbacks.")
 
@@ -112,7 +114,7 @@ st.divider()
 st.subheader("5. Forecasting")
 steps = st.slider("Forecast horizon", 1, 10, 5)
 try:
-    arima_model, mean, ci = forecast_arima(df, steps)
+    _, mean, ci = forecast_arima(df, steps)
     future_years = np.arange(int(df.year.max()) + 1, int(df.year.max()) + steps + 1)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df.year, y=df.exports_bn_usd, mode="lines+markers", name="Historical"))
@@ -131,7 +133,7 @@ st.markdown("For a real intervention analysis, provide a defensible treatment/co
 start_year = st.number_input("Policy/intervention start year", int(df.year.min()) if len(df) else 2000, int(df.year.max()) if len(df) else 2025, min(2018, int(df.year.max())) if len(df) else 2018)
 if st.button("Run DiD analysis", use_container_width=True):
     try:
-        did_model, did_df = did_analysis(df, int(start_year))
+        did_model, _ = did_analysis(df, int(start_year))
         st.metric("Estimated DiD effect", f"{did_model.params['treated_post']:.3f} $B", help="Interaction coefficient in this simplified single-series teaching setup.")
         st.dataframe(pd.DataFrame({"coefficient": did_model.params, "std_error": did_model.bse, "p_value": did_model.pvalues, "ci_low": did_model.conf_int()[0], "ci_high": did_model.conf_int()[1]}), use_container_width=True)
         st.warning("For publication-quality causal inference, use panel data with a clearly defined untreated control group and parallel-trends checks.")
