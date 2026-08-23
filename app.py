@@ -23,12 +23,13 @@ def home():
     st.sidebar.caption(f"🌐 Macro data refresh: {live_timestamp()}")
 
     st.markdown("""<div style="padding:2rem 0 1.5rem;border-bottom:1px solid var(--st-border-color);margin-bottom:2rem"><h1>🌏 TradeWar AI Simulator</h1><p style="max-width:720px;line-height:1.65">Explore how tariffs and trade shocks reshape supply chains, financial markets and demographics. Macro, demographic, FX and market inputs are refreshed from live public sources where available.</p></div>""", unsafe_allow_html=True)
-    cols = st.columns(5)
+    cols = st.columns(6)
     cards = [
         ("⚙️", "Custom Scenario", "Model tariff changes and trade diversion.", "pages/1_Scenario.py"),
         ("🔬", "Historical Data Lab", "Upload real historical data, run statistics, forecasts and counterfactuals.", "pages/6_Historical_Data_Lab.py"),
         ("🔄", "Historical Counterfactual", "Explore alternative policy histories.", "pages/2_Historical_Counterfactual.py"),
         ("💹", "Financial Markets", "Track live market conditions and tariff scenarios.", "pages/3_Financial_Markets.py"),
+        ("🌐", "Global Market Explorer", "Compare global indices, listed assets and any Yahoo Finance ticker.", "pages/5_Global_Market_Explorer.py"),
         ("👥", "Demographics", "Explore refreshed macro and demographic indicators.", "pages/4_Demographics.py"),
     ]
     for col, (icon, title, desc, page) in zip(cols, cards):
