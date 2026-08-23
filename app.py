@@ -26,20 +26,21 @@ def home():
     cols = st.columns(5)
     cards = [
         ("⚙️", "Custom Scenario", "Model tariff changes and trade diversion.", "pages/1_Scenario.py"),
+        ("🔬", "Historical Data Lab", "Upload real historical data, run statistics, forecasts and counterfactuals.", "pages/6_Historical_Data_Lab.py"),
         ("🔄", "Historical Counterfactual", "Explore alternative policy histories.", "pages/2_Historical_Counterfactual.py"),
         ("💹", "Financial Markets", "Track live market conditions and tariff scenarios.", "pages/3_Financial_Markets.py"),
-        ("🌐", "Global Market Explorer", "Compare global indices, listed assets and any Yahoo Finance ticker.", "pages/5_Global_Market_Explorer.py"),
         ("👥", "Demographics", "Explore refreshed macro and demographic indicators.", "pages/4_Demographics.py"),
     ]
     for col, (icon, title, desc, page) in zip(cols, cards):
         with col:
             st.markdown(f'<div style="padding:1.2rem;border:1px solid var(--st-border-color);border-radius:.6rem;min-height:150px"><div style="font-size:1.4rem">{icon}</div><b>{title}</b><p style="font-size:.82rem;line-height:1.5">{desc}</p></div>', unsafe_allow_html=True)
             st.page_link(page, label="Open →", use_container_width=True)
-    st.info("**Data note:** trade-flow baselines remain synthetic for reproducible policy experiments. Macro/demographic data use public APIs and market prices use exchange/provider data. External data can fail temporarily; affected metrics are marked unavailable or use the documented baseline fallback.")
+    st.info("**Data note:** built-in trade-flow data remain synthetic for reproducible policy experiments. The Historical Data Lab lets users replace the synthetic dataset with real observations and clearly separates statistical/economic estimates from illustrative scenarios.")
 
 
 pg = st.navigation({"": [st.Page(home, title="Home", icon="🏠", default=True)], "Simulator": [
     st.Page("pages/1_Scenario.py", title="Custom Scenario", icon="⚙️"),
+    st.Page("pages/6_Historical_Data_Lab.py", title="Historical Data Lab", icon="🔬"),
     st.Page("pages/2_Historical_Counterfactual.py", title="Historical Counterfactual", icon="🔄"),
     st.Page("pages/3_Financial_Markets.py", title="Financial Markets", icon="💹"),
     st.Page("pages/5_Global_Market_Explorer.py", title="Global Market Explorer", icon="🌐"),
