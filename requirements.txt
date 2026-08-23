@@ -9,3 +9,4 @@ scikit-learn>=1.4
 yfinance>=1.0,<2.0
 requests>=2.31
 bdshare>=1.2.3
+openpyxl>=3.1
