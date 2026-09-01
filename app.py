@@ -1,5 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
+from datetime import datetime
 import utils
 from beneficiary import build_country_scenario as continuous_build_country_scenario
 from theme import inject_css
@@ -19,9 +20,14 @@ except Exception:
 
 
 def render_visitor_counter():
+    """Render a persistent, lightweight visit counter without affecting app state."""
+    today_key = datetime.now().strftime("%Y-%m-%d")
+    count_this_session = "1" if "visitor_counter_recorded" not in st.session_state else "0"
+    st.session_state.setdefault("visitor_counter_recorded", True)
+
     components.html(
-        """
-        <div id="visitor-card" style="font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:0 0 18px 0;">
+        f"""
+        <div id="visitor-card" style="font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:0 0 18px 0;">
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <div style="border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:10px 16px;min-width:150px;">
                     <div style="font-size:12px;opacity:.7;">🌍 Total Visits</div>
@@ -34,43 +40,33 @@ def render_visitor_counter():
             </div>
         </div>
         <script>
-        (async function () {
-            const endpoint = 'https://visitor.6developer.com/visit';
-            const domain = window.location.hostname || 'trade-war-ai-simulator.streamlit.app';
-            const storageKey = 'trade-war-ai-simulator-visitor-recorded';
+        (async function () {{
+            const base = 'https://abacus.jasoncameron.dev';
+            const totalKey = 'tradewar-ai-simulator-total-visits';
+            const todayKey = 'tradewar-ai-simulator-visits-{today_key}';
+            const shouldCount = {count_this_session};
 
-            try {
-                let data;
-                if (!sessionStorage.getItem(storageKey)) {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            domain: domain,
-                            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                            page_path: '/',
-                            page_title: 'TradeWar AI Simulator',
-                            referrer: document.referrer || ''
-                        })
-                    });
-                    data = await response.json();
-                    sessionStorage.setItem(storageKey, '1');
-                } else {
-                    const response = await fetch(endpoint + '?domain=' + encodeURIComponent(domain));
-                    data = await response.json();
-                }
+            async function request(path) {{
+                const response = await fetch(base + path, {{cache: 'no-store'}});
+                if (!response.ok) throw new Error('Counter request failed: ' + response.status);
+                return response.json();
+            }}
 
-                if (data && typeof data.totalCount !== 'undefined') {
-                    document.getElementById('total-visits').textContent = Number(data.totalCount).toLocaleString();
-                }
-                if (data && typeof data.todayCount !== 'undefined') {
-                    document.getElementById('today-visits').textContent = Number(data.todayCount).toLocaleString();
-                }
-            } catch (error) {
+            try {{
+                const total = await request((shouldCount ? '/hit/' : '/get/') + 'tradewar-ai-simulator/visits');
+                const today = await request((shouldCount ? '/hit/' : '/get/') + 'tradewar-ai-simulator/' + todayKey);
+
+                const totalValue = total && typeof total.value !== 'undefined' ? total.value : total.count;
+                const todayValue = today && typeof today.value !== 'undefined' ? today.value : today.count;
+
+                document.getElementById('total-visits').textContent = Number(totalValue).toLocaleString();
+                document.getElementById('today-visits').textContent = Number(todayValue).toLocaleString();
+            }} catch (error) {{
                 document.getElementById('total-visits').textContent = '—';
                 document.getElementById('today-visits').textContent = '—';
-            }
-        })();
+                console.error('Visitor counter:', error);
+            }}
+        }})();
         </script>
         """,
         height=82,
