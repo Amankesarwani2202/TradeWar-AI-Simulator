@@ -21,9 +21,9 @@ def current_theme_type():
 def theme_colors():
     """Return concrete Plotly-safe colors for the active Streamlit theme.
 
-    Plotly charts are rendered in their own document/iframe, so Streamlit CSS
-    variables such as --st-text-color cannot be relied on inside the chart.
-    Use actual colors here and apply them to every Plotly text element.
+    Plotly SVG text is rendered separately from the surrounding Streamlit DOM,
+    so CSS variables cannot reliably recolor it. These concrete values are
+    applied directly to Plotly's layout/trace properties.
     """
     if current_theme_type() == "light":
         return {
@@ -77,8 +77,6 @@ def apply_plotly_theme(fig):
         color=colors["text"],
     )
 
-    # These are rendered as trace/annotation attributes inside the Plotly
-    # document, so CSS in the parent Streamlit page cannot recolor them.
     for trace in fig.data:
         try:
             if getattr(trace, "textfont", None) is not None:
@@ -102,18 +100,40 @@ def apply_plotly_theme(fig):
         except Exception:
             pass
 
-    annotations = list(fig.layout.annotations) if fig.layout.annotations else []
-    for annotation in annotations:
-        annotation.font = dict(
-            **(annotation.font.to_plotly_json() if annotation.font else {}),
-            color=colors["text"],
-        )
+    for annotation in list(fig.layout.annotations) if fig.layout.annotations else []:
+        existing_font = annotation.font.to_plotly_json() if annotation.font else {}
+        annotation.font = dict(**existing_font, color=colors["text"])
 
     return fig
 
 
+def patch_streamlit_plotly_chart():
+    """Theme every Plotly chart, including charts that don't call the helper.
+
+    This is intentionally installed once when theme.py is imported. It keeps
+    existing pages unchanged while ensuring charts such as Demographics, which
+    previously used plotly_white/plotly_dark directly, also follow the active
+    Streamlit theme.
+    """
+    if getattr(st, "_trade_war_plotly_theme_patched", False):
+        return
+
+    original_plotly_chart = st.plotly_chart
+
+    def themed_plotly_chart(figure_or_data, *args, **kwargs):
+        try:
+            if hasattr(figure_or_data, "update_layout") and hasattr(figure_or_data, "data"):
+                figure_or_data = apply_plotly_theme(figure_or_data)
+        except Exception:
+            pass
+        return original_plotly_chart(figure_or_data, *args, **kwargs)
+
+    st.plotly_chart = themed_plotly_chart
+    st._trade_war_plotly_theme_patched = True
+
+
 def inject_css():
-    """Inject CSS for Streamlit UI and keep Plotly charts theme-aware."""
+    """Inject CSS that follows Streamlit's active theme for normal UI."""
     css = """
     <style>
         :root {
@@ -156,8 +176,6 @@ def inject_css():
         }
         .tw-hint p { color:inherit; }
         .tw-muted { color:var(--app-muted) !important; }
-        /* Keep parent-page Plotly SVG text aligned with the active theme when
-           Streamlit renders a chart directly in the page. */
         .js-plotly-plot .plotly svg text,
         .js-plotly-plot .plotly .gtitle,
         .js-plotly-plot .plotly .xtitle,
@@ -176,3 +194,6 @@ def inject_css():
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
+
+
+patch_streamlit_plotly_chart()
