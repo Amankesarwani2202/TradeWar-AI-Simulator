@@ -107,9 +107,40 @@ def model_metrics(actual, predicted):
 
 def make_plot(df, title="Historical exports and tariffs"):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df.year, y=df.exports_bn_usd, mode="lines+markers", name="Exports ($B)", yaxis="y"))
-    fig.add_trace(go.Scatter(x=df.year, y=df.tariff_pct, mode="lines+markers", name="Tariff (%)", yaxis="y2"))
-    fig.update_layout(title=title, xaxis_title="Year", yaxis=dict(title="Exports ($B)"), yaxis2=dict(title="Tariff (%)", overlaying="y", side="right"), hovermode="x unified")
+    fig.add_trace(go.Scatter(
+        x=df.year, y=df.exports_bn_usd, mode="lines+markers", name="Exports ($B)",
+        yaxis="y", hovertemplate="Year: %{x}<br>Exports: $%{y:.2f}B<extra></extra>"
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.year, y=df.tariff_pct, mode="lines+markers", name="Tariff (%)",
+        yaxis="y2", hovertemplate="Year: %{x}<br>Tariff: %{y:.2f}%<extra></extra>"
+    ))
+    fig.update_layout(
+        title=title,
+        xaxis=dict(title="Year", automargin=True, tickmode="auto", nticks=8),
+        yaxis=dict(title="Exports ($B)", automargin=True),
+        yaxis2=dict(title="Tariff (%)", overlaying="y", side="right", automargin=True),
+        hovermode="x unified",
+        margin=dict(l=70, r=90, t=75, b=65),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        coloraxis_showscale=False,
+    )
+    return fig
+
+
+def style_historical_chart(fig, legend=True):
+    """Keep charts in Historical Data Lab readable without changing data or series styling."""
+    layout = dict(
+        margin=dict(l=70, r=70, t=75, b=65),
+        hovermode="x unified",
+        coloraxis_showscale=False,
+    )
+    if legend:
+        layout["legend"] = dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
+    fig.update_layout(**layout)
+    for axis in ("xaxis", "yaxis", "yaxis2"):
+        if axis in fig.layout:
+            getattr(fig.layout, axis).automargin = True
     return fig
 
 
