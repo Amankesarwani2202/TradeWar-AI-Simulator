@@ -21,6 +21,18 @@ DARK_COLORS = {
 }
 
 
+def inject_css():
+    """Inject the app-wide CSS used by app.py and Streamlit pages."""
+    st.markdown(
+        '''<style>
+        .main .block-container{padding-top:2rem;padding-bottom:2rem}
+        [data-testid="metric-container"]{padding:1.1rem;border-radius:.5rem}
+        h1,h2,h3,h4,h5,h6{font-weight:600}
+        </style>''',
+        unsafe_allow_html=True,
+    )
+
+
 def is_dark_theme():
     try:
         return st.context.theme.base == "dark"
@@ -71,7 +83,6 @@ def apply_plotly_theme(fig: Figure) -> Figure:
                 current = getattr(trace, attr, None)
                 if current is not None:
                     current_json = current.to_plotly_json() if hasattr(current, "to_plotly_json") else dict(current)
-                    # Respect an explicit trace text color; otherwise use the theme.
                     if "color" not in current_json:
                         current_json["color"] = colors["text"]
                     setattr(trace, attr, current_json)
@@ -99,9 +110,8 @@ def apply_plotly_theme(fig: Figure) -> Figure:
             pass
 
     for annotation in list(fig.layout.annotations) if fig.layout.annotations else []:
-        # Preserve explicit annotation colors (for example the per-cell colors
-        # used by the Historical Data Lab correlation matrix). Only apply the
-        # theme color when an annotation did not specify one itself.
+        # Preserve explicit annotation colors, such as the per-cell colors in
+        # the Historical Data Lab correlation matrix.
         try:
             existing_font = annotation.font.to_plotly_json() if annotation.font else {}
             if "color" not in existing_font:
