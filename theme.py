@@ -107,8 +107,19 @@ def apply_plotly_theme(fig):
             pass
 
     for annotation in list(fig.layout.annotations) if fig.layout.annotations else []:
-        existing_font = annotation.font.to_plotly_json() if annotation.font else {}
-        annotation.font = dict(**existing_font, color=colors["text"])
+        # annotation.font may already contain a color. Using
+        # dict(**existing_font, color=...) raises TypeError when that happens:
+        # Python sees duplicate values for the same keyword. Update the copied
+        # dictionary instead so every annotation is safely theme-aware.
+        try:
+            existing_font = annotation.font.to_plotly_json() if annotation.font else {}
+            existing_font["color"] = colors["text"]
+            annotation.font = existing_font
+        except Exception:
+            try:
+                annotation.font.color = colors["text"]
+            except Exception:
+                pass
 
     return fig
 
