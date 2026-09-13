@@ -2,7 +2,7 @@ import streamlit as st
 
 
 def current_theme_type():
-    """Return the actual active Streamlit theme, including user menu switches."""
+    """Return Streamlit's reported active theme when available."""
     try:
         theme_type = st.context.theme.type
         if theme_type in ("dark", "light"):
@@ -19,23 +19,57 @@ def current_theme_type():
 
 
 def theme_colors():
-    if current_theme_type() == "dark":
-        return {"background": "#0b1220", "secondary": "#111827", "text": "#e5e7eb", "muted": "#94a3b8", "border": "#334155", "grid": "#334155"}
-    return {"background": "#ffffff", "secondary": "#f8fafc", "text": "#111827", "muted": "#64748b", "border": "#e2e8f0", "grid": "#e2e8f0"}
+    """Return theme colors using Streamlit's live CSS theme variables.
+
+    The Settings theme switch is a browser-side change. Reading st.context.theme
+    here is not reliable during a theme switch, so custom CSS must reference
+    Streamlit's --st-* variables directly instead of freezing the colors at
+    Python render time.
+    """
+    return {
+        "background": "var(--st-background-color)",
+        "secondary": "var(--st-secondary-background-color)",
+        "text": "var(--st-text-color)",
+        "muted": "var(--st-gray-text-color)",
+        "border": "var(--st-border-color)",
+        "grid": "var(--st-border-color)",
+    }
 
 
 def apply_plotly_theme(fig):
+    """Apply a theme-neutral Plotly layout that follows Streamlit's live theme."""
     colors = theme_colors()
-    dark = current_theme_type() == "dark"
     fig.update_layout(
-        template="plotly_dark" if dark else "plotly_white",
-        paper_bgcolor=colors["background"], plot_bgcolor=colors["background"],
-        font=dict(color=colors["text"]), title=dict(font=dict(color=colors["text"])),
+        # Keep Plotly transparent so the active Streamlit theme supplies the
+        # actual light/dark background without requiring a Python rerun.
+        template="plotly",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=colors["text"]),
+        title=dict(font=dict(color=colors["text"])),
         legend=dict(font=dict(color=colors["text"])),
-        hoverlabel=dict(bgcolor=colors["secondary"], font=dict(color=colors["text"]), bordercolor=colors["border"]),
+        hoverlabel=dict(
+            bgcolor=colors["secondary"],
+            font=dict(color=colors["text"]),
+            bordercolor=colors["border"],
+        ),
     )
-    fig.update_xaxes(title_font=dict(color=colors["text"]), tickfont=dict(color=colors["text"]), gridcolor=colors["grid"], zerolinecolor=colors["grid"], linecolor=colors["border"], color=colors["text"])
-    fig.update_yaxes(title_font=dict(color=colors["text"]), tickfont=dict(color=colors["text"]), gridcolor=colors["grid"], zerolinecolor=colors["grid"], linecolor=colors["border"], color=colors["text"])
+    fig.update_xaxes(
+        title_font=dict(color=colors["text"]),
+        tickfont=dict(color=colors["text"]),
+        gridcolor=colors["grid"],
+        zerolinecolor=colors["grid"],
+        linecolor=colors["border"],
+        color=colors["text"],
+    )
+    fig.update_yaxes(
+        title_font=dict(color=colors["text"]),
+        tickfont=dict(color=colors["text"]),
+        gridcolor=colors["grid"],
+        zerolinecolor=colors["grid"],
+        linecolor=colors["border"],
+        color=colors["text"],
+    )
     for trace in fig.data:
         try:
             if getattr(trace, "marker", None) is not None and getattr(trace.marker, "colorbar", None) is not None:
@@ -50,50 +84,49 @@ def apply_plotly_theme(fig):
 
 
 def inject_css():
-    colors = theme_colors()
-    dark = current_theme_type() == "dark"
-    css = f"""
+    """Inject CSS that follows Streamlit's active theme without Python reruns."""
+    css = """
     <style>
-        :root {{
-            --app-background:{colors['background']};
-            --app-secondary:{colors['secondary']};
-            --app-text:{colors['text']};
-            --app-muted:{colors['muted']};
-            --app-border:{colors['border']};
-        }}
-        .main .block-container {{ padding-top:2rem; padding-bottom:1.25rem; }}
-        [data-testid="metric-container"] {{ padding:1.1rem; border-radius:.5rem; }}
-        h1,h2,h3,h4,h5,h6 {{ color:var(--app-text) !important; font-weight:600; }}
-        p,li,label {{ color:var(--app-text); }}
-        [data-testid="stCaptionContainer"] {{ color:var(--app-muted) !important; }}
-        [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {{ color:var(--app-text); }}
-        [data-testid="stSidebar"] {{ background:var(--app-background) !important; }}
-        [data-testid="stAlert"] {{ color:var(--app-text) !important; }}
-        [data-testid="stAlert"] p,[data-testid="stAlert"] span,[data-testid="stAlert"] strong {{ color:inherit !important; }}
-        .tw-panel {{
+        :root {
+            --app-background:var(--st-background-color);
+            --app-secondary:var(--st-secondary-background-color);
+            --app-text:var(--st-text-color);
+            --app-muted:var(--st-gray-text-color);
+            --app-border:var(--st-border-color);
+        }
+        .main .block-container { padding-top:2rem; padding-bottom:1.25rem; }
+        [data-testid="metric-container"] { padding:1.1rem; border-radius:.5rem; }
+        h1,h2,h3,h4,h5,h6 { color:var(--app-text) !important; font-weight:600; }
+        p,li,label { color:var(--app-text); }
+        [data-testid="stCaptionContainer"] { color:var(--app-muted) !important; }
+        [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] { color:var(--app-text); }
+        [data-testid="stSidebar"] { background:var(--app-background) !important; }
+        [data-testid="stAlert"] { color:var(--app-text) !important; }
+        [data-testid="stAlert"] p,[data-testid="stAlert"] span,[data-testid="stAlert"] strong { color:inherit !important; }
+        .tw-panel {
             background:var(--app-secondary) !important;
             padding:1rem 1.25rem;
             border-radius:.5rem;
             border:1px solid var(--app-border);
             margin-bottom:1.5rem;
-        }}
-        .tw-panel p, .tw-panel span, .tw-panel strong {{ color:var(--app-text); }}
-        .tw-panel .tw-muted {{ color:var(--app-muted) !important; }}
-        .tw-panel-inner {{
+        }
+        .tw-panel p, .tw-panel span, .tw-panel strong { color:var(--app-text); }
+        .tw-panel .tw-muted { color:var(--app-muted) !important; }
+        .tw-panel-inner {
             background:var(--app-background) !important;
             padding:0.8rem;
             border-radius:.4rem;
             border:1px solid var(--app-border);
-        }}
-        .tw-panel-inner p, .tw-panel-inner span {{ color:var(--app-text); }}
-        .tw-panel-inner .tw-muted {{ color:var(--app-muted) !important; }}
-        .tw-hint {{
+        }
+        .tw-panel-inner p, .tw-panel-inner span { color:var(--app-text); }
+        .tw-panel-inner .tw-muted { color:var(--app-muted) !important; }
+        .tw-hint {
             background:var(--app-secondary) !important;
             padding:.5rem .75rem;
             border-radius:.4rem;
-        }}
-        .tw-hint p {{ color:inherit; }}
-        .tw-muted {{ color:var(--app-muted) !important; }}
+        }
+        .tw-hint p { color:inherit; }
+        .tw-muted { color:var(--app-muted) !important; }
         /* Do not set SVG fill/background here: Plotly uses child SVG paths for
            node markers and edges, and forcing fill on the parent can hide them. */
         .js-plotly-plot .plotly svg text,
@@ -104,14 +137,13 @@ def inject_css():
         .js-plotly-plot .plotly .ytick text,
         .js-plotly-plot .plotly .legendtext,
         .js-plotly-plot .plotly .cbtitle,
-        .js-plotly-plot .plotly .cbaxis text {{ fill:var(--app-text) !important; }}
+        .js-plotly-plot .plotly .cbaxis text { fill:var(--app-text) !important; }
         .js-plotly-plot .plotly .gridlayer path,
         .js-plotly-plot .plotly .zerolinelayer path,
         .js-plotly-plot .plotly .xaxislayer-above path,
-        .js-plotly-plot .plotly .yaxislayer-above path {{ stroke:var(--app-border) !important; }}
-        [data-testid="stDataFrame"] {{ color:var(--app-text) !important; }}
-        [data-testid="stDataFrame"] iframe {{ color-scheme:{'dark' if dark else 'light'}; }}
-        [data-testid="stPlotlyChart"] {{ margin-bottom:0 !important; }}
+        .js-plotly-plot .plotly .yaxislayer-above path { stroke:var(--app-border) !important; }
+        [data-testid="stDataFrame"] { color:var(--app-text) !important; }
+        [data-testid="stPlotlyChart"] { margin-bottom:0 !important; }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
