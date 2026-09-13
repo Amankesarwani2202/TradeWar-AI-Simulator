@@ -34,8 +34,12 @@ def inject_css():
 
 
 def is_dark_theme():
+    """Return the active Streamlit theme selected by the user."""
     try:
-        return st.context.theme.base == "dark"
+        # st.context.theme.type reflects the active light/dark theme selected
+        # in Streamlit Settings and is preferable to reading theme.base from
+        # config.toml, which is only the default/inheritance base.
+        return st.context.theme.type == "dark"
     except Exception:
         try:
             return st.get_option("theme.base") == "dark"
@@ -47,8 +51,13 @@ def get_theme_colors():
     return DARK_COLORS if is_dark_theme() else LIGHT_COLORS
 
 
+# Backwards-compatible helper used by existing visualization modules.
+def theme_colors():
+    return get_theme_colors()
+
+
 def apply_plotly_theme(fig: Figure) -> Figure:
-    """Apply the app theme to Plotly figures without overriding explicit colors."""
+    """Apply the active Streamlit theme to Plotly figures."""
     colors = get_theme_colors()
 
     fig.update_layout(
@@ -110,8 +119,8 @@ def apply_plotly_theme(fig: Figure) -> Figure:
             pass
 
     for annotation in list(fig.layout.annotations) if fig.layout.annotations else []:
-        # Preserve explicit annotation colors, such as the per-cell colors in
-        # the Historical Data Lab correlation matrix.
+        # Preserve explicit annotation colors, such as per-cell colors in the
+        # Historical Data Lab correlation matrix.
         try:
             existing_font = annotation.font.to_plotly_json() if annotation.font else {}
             if "color" not in existing_font:
@@ -137,6 +146,8 @@ def patch_streamlit_plotly_chart():
     def themed_plotly_chart(figure_or_data, *args, **kwargs):
         if isinstance(figure_or_data, Figure):
             figure_or_data = apply_plotly_theme(figure_or_data)
+            # Prevent Streamlit from applying a second, potentially conflicting
+            # Plotly theme after our explicit light/dark colors are applied.
             kwargs["theme"] = None
         return original_plotly_chart(figure_or_data, *args, **kwargs)
 
