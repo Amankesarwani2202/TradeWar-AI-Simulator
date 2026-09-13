@@ -29,12 +29,12 @@ def render_visitor_counter():
         f"""
         <div id="visitor-card" style="font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:0 0 18px 0;">
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <div style="border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:10px 16px;min-width:150px;">
-                    <div style="font-size:12px;opacity:.7;">🌍 Total Visits</div>
+                <div class="visitor-stat" style="border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:10px 16px;min-width:150px;">
+                    <div class="visitor-label" style="font-size:12px;opacity:.7;">🌍 Total Visits</div>
                     <div id="total-visits" style="font-size:24px;font-weight:700;margin-top:2px;">—</div>
                 </div>
-                <div style="border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:10px 16px;min-width:150px;">
-                    <div style="font-size:12px;opacity:.7;">📅 Today's Visits</div>
+                <div class="visitor-stat" style="border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:10px 16px;min-width:150px;">
+                    <div class="visitor-label" style="font-size:12px;opacity:.7;">📅 Today's Visits</div>
                     <div id="today-visits" style="font-size:24px;font-weight:700;margin-top:2px;">—</div>
                 </div>
             </div>
@@ -45,6 +45,34 @@ def render_visitor_counter():
             const totalKey = 'tradewar-ai-simulator-total-visits';
             const todayKey = 'tradewar-ai-simulator-visits-{today_key}';
             const shouldCount = {count_this_session};
+            const card = document.getElementById('visitor-card');
+            const stats = document.querySelectorAll('.visitor-stat');
+            const labels = document.querySelectorAll('.visitor-label');
+            const values = document.querySelectorAll('#total-visits, #today-visits');
+
+            function syncTheme() {{
+                try {{
+                    const root = window.parent.document.documentElement;
+                    const styles = window.parent.getComputedStyle(root);
+                    const text = styles.getPropertyValue('--st-text-color').trim();
+                    const border = styles.getPropertyValue('--st-border-color').trim();
+                    const muted = styles.getPropertyValue('--st-gray-text-color').trim();
+                    const background = styles.getPropertyValue('--st-background-color').trim();
+
+                    if (text) {{
+                        card.style.color = text;
+                        values.forEach((el) => el.style.color = text);
+                    }}
+                    if (border) stats.forEach((el) => el.style.borderColor = border);
+                    if (muted) labels.forEach((el) => el.style.color = muted);
+                    if (background) card.style.backgroundColor = background;
+                }} catch (error) {{
+                    console.debug('Visitor counter theme sync:', error);
+                }}
+            }}
+
+            syncTheme();
+            setInterval(syncTheme, 250);
 
             async function request(path) {{
                 const response = await fetch(base + path, {{cache: 'no-store'}});
