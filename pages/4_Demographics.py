@@ -87,14 +87,76 @@ def build_sector_chart(profile, country):
 def build_population_forecast(profile, years_ahead=10, fertility_adj=0.0, migration_adj=0.0):
     pop = profile.get("population_mn", 100)
     median_age = profile.get("median_age", 35)
-    base_growth = max(0.001, (50 - median_age) / 1000 + 0.005 + fertility_adj / 100)
+    base_growth = max(0.001, (50 - median_age) / 1000 + 0.005)
 
     historical_pops = [pop * (1 - base_growth) ** (2024 - y) for y in YEARS]
     future_years = list(range(2025, 2025 + years_ahead))
     future_pops_baseline = [pop * (1 + base_growth) ** i for i in range(1, years_ahead + 1)]
-    scenario_growth = base_growth + fertility_adj / 100 + migration_adj / 1000
+    # Migration is entered in thousands/year, so convert it to a population-share rate.
+    migration_rate = migration_adj / max(pop * 1000, 1)
+    scenario_growth = base_growth + fertility_adj / 100 + migration_rate
+    scenario_growth = max(-0.05, min(0.08, scenario_growth))
     future_pops_scenario = [pop * (1 + scenario_growth) ** i for i in range(1, years_ahead + 1)]
     return list(YEARS), historical_pops, future_years, future_pops_baseline, future_pops_scenario
+
+
+def apply_demographic_scenario(profile, years_ahead, fertility_adj, migration_adj):
+    """Create the projected profile used by Overview/Impact and comparison.
+
+    The sidebar controls previously only affected the forecast chart. This function
+    propagates the same scenario into the other demographic views so every component
+    represents the selected forecast horizon and assumptions.
+    """
+    scenario = dict(profile)
+    base_pop = float(profile.get("population_mn", 100))
+    base_age = float(profile.get("median_age", 35))
+    base_growth = max(0.001, (50 - base_age) / 1000 + 0.005)
+    migration_rate = migration_adj / max(base_pop * 1000, 1)
+    scenario_growth = base_growth + fertility_adj / 100 + migration_rate
+    scenario_growth = max(-0.05, min(0.08, scenario_growth))
+
+    projected_pop = base_pop * (1 + scenario_growth) ** years_ahead
+    scenario["population_mn"] = round(projected_pop, 1)
+
+    age_dist = dict(profile.get("age_distribution", {}))
+    if age_dist:
+        # Fertility primarily changes the younger cohorts; migration primarily changes
+        # working-age cohorts. Keep the distribution normalized to 100%.
+        fertility_shift = float(np.clip(fertility_adj * years_ahead * 0.08, -6, 6))
+        migration_shift = float(np.clip(migration_rate * years_ahead * 100, -5, 5))
+        age_dist["0-14"] = age_dist.get("0-14", 20) + fertility_shift
+        age_dist["15-29"] = age_dist.get("15-29", 22) + fertility_shift * 0.30 + migration_shift * 0.70
+        age_dist["30-44"] = age_dist.get("30-44", 22) + migration_shift * 0.30
+        age_dist["45-59"] = age_dist.get("45-59", 20) - fertility_shift * 0.15
+        age_dist["60+"] = age_dist.get("60+", 16) - fertility_shift * 0.15 - migration_shift * 0.30
+        total = sum(max(0.1, v) for v in age_dist.values())
+        scenario["age_distribution"] = {k: round(max(0.1, v) / total * 100, 2) for k, v in age_dist.items()}
+
+        young_share = scenario["age_distribution"].get("0-14", 20)
+        older_share = scenario["age_distribution"].get("60+", 16)
+        scenario["median_age"] = round(float(np.clip(base_age + (older_share - young_share) * 0.08, 15, 70)), 1)
+
+    base_participation = float(profile.get("labor_force_mn", 0)) / max(base_pop, 1)
+    working_share = sum(scenario.get("age_distribution", {}).get(k, 0) for k in ["15-29", "30-44", "45-59"]) / 100
+    if working_share > 0:
+        scenario["labor_force_mn"] = round(projected_pop * min(0.95, base_participation * (working_share / max(0.65, base_participation)),), 1)
+    else:
+        scenario["labor_force_mn"] = round(projected_pop * base_participation, 1)
+
+    # Use the same structural transformation assumptions as the forecast table so the
+    # sector chart and sector descriptions also respond to the forecast horizon.
+    for sector, key in [("Primary", "primary_sector_pct"), ("Secondary", "secondary_sector_pct"), ("Tertiary", "tertiary_sector_pct"), ("Quaternary", "quaternary_sector_pct")]:
+        base_pct = float(profile.get(key, 0))
+        change = {
+            "Primary": -0.5 * years_ahead / 5,
+            "Secondary": 0.2 * years_ahead / 5,
+            "Tertiary": 0.25 * years_ahead / 5,
+            "Quaternary": 0.05 * years_ahead / 5,
+        }.get(sector, 0)
+        scenario[key] = round(max(1, min(80, base_pct + change)), 2)
+
+    scenario["scenario_year"] = 2024 + years_ahead
+    return scenario
 
 
 def classify_demographic(profile):
@@ -129,7 +191,7 @@ st.sidebar.markdown("<h2 style='font-size:1.4rem;margin-bottom:1rem;'>👥 Demog
 # Explicit keys keep the demographic controls stable and make their values
 # unambiguous across reruns of this multipage Streamlit application.
 country = st.sidebar.selectbox("Select country", COUNTRIES, key="demographics_country")
-profile = dict(COUNTRY_PROFILES.get(country, {}))
+base_profile = dict(COUNTRY_PROFILES.get(country, {}))
 
 compare_options = [c for c in COUNTRIES if c != country]
 if st.session_state.get("demographics_compare_country") not in compare_options:
@@ -151,6 +213,12 @@ forecast_years = st.sidebar.slider(
     "Forecast horizon (years)", min_value=5, max_value=30, value=15, step=5,
     key="demographics_forecast_years"
 )
+
+# Propagate the scenario into the Overview/Impact and selected-country side of
+# Country Comparison. The comparison country remains the baseline for a clean
+# apples-to-apples scenario comparison.
+profile = apply_demographic_scenario(base_profile, forecast_years, fertility_adj, migration_adj)
+scenario_year = profile.get("scenario_year", 2024 + forecast_years)
 
 # A unique signature is used for chart keys so Plotly components are recreated
 # whenever user inputs change instead of retaining the previous chart instance.
@@ -175,8 +243,8 @@ participation = round((labor / pop * 100), 1) if pop > 0 else 0
 # Summary banner
 st.markdown(
     f'<div class="tw-panel">'
-    f'<p style="margin:0;font-size:0.72rem;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:0.06em;">Demographic Profile</p>'
-    f'<p style="margin:0.2rem 0 0 0;font-size:0.98rem;font-weight:700;">{country}</p>'
+    f'<p style="margin:0;font-size:0.72rem;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:0.06em;">Demographic Scenario Profile</p>'
+    f'<p style="margin:0.2rem 0 0 0;font-size:0.98rem;font-weight:700;">{country} — {scenario_year} snapshot</p>'
     f'<p class="tw-muted" style="margin:0.3rem 0 0 0;font-size:0.82rem;">'
     f'Population: {pop:,}M &nbsp;·&nbsp; Labour force: {labor:,}M &nbsp;·&nbsp; Median age: {age} yrs &nbsp;·&nbsp; '
     f'Urbanisation: {urban}% &nbsp;·&nbsp; Labour participation: {participation:.0f}%'
@@ -188,9 +256,9 @@ st.markdown(
 # Key metrics
 col1, col2, col3, col4, col5 = st.columns(5, gap="small")
 with col1:
-    st.metric("👥 Population", f"{pop:,}M", help="Total population in millions")
+    st.metric("👥 Population", f"{pop:,}M", help="Projected population under the selected demographic scenario")
 with col2:
-    st.metric("💼 Labour Force", f"{labor:,}M", help="Working-age population actively employed or seeking work")
+    st.metric("💼 Labour Force", f"{labor:,}M", help="Projected labour force under the selected demographic scenario")
 with col3:
     age_emoji = "👴" if age > 42 else "👨" if age > 32 else "👶"
     st.metric(f"{age_emoji} Median Age", f"{age} yrs")
@@ -215,7 +283,7 @@ st.markdown(
 overview_tab, forecast_tab, compare_tab = st.tabs(["📊 Overview & Impact", "🔮 Forecast & Scenarios", "🌍 Country Comparison"])
 
 with overview_tab:
-    st.markdown("<h3 style='margin-bottom:1rem;'>📊 Population Structure & Sector Breakdown</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='margin-bottom:1rem;'>📊 Population Structure & Sector Breakdown — {scenario_year}</h3>", unsafe_allow_html=True)
 
     col_pyramid, col_sector = st.columns(2, gap="large")
 
@@ -300,7 +368,7 @@ with forecast_tab:
     st.markdown("<h3 style='margin-bottom:1rem;'>🔮 Population Forecast & Demographic Scenario</h3>", unsafe_allow_html=True)
 
     hist_years, hist_pops, future_years, future_baseline, future_scenario = build_population_forecast(
-        profile, years_ahead=forecast_years, fertility_adj=fertility_adj, migration_adj=migration_adj
+        base_profile, years_ahead=forecast_years, fertility_adj=fertility_adj, migration_adj=migration_adj
     )
 
     fig_pop = go.Figure()
@@ -326,9 +394,9 @@ with forecast_tab:
 
     col_s1, col_s2, col_s3 = st.columns(3, gap="medium")
     with col_s1:
-        st.metric("Current population", f"{pop:,}M")
+        st.metric("Current population", f"{base_profile.get('population_mn', 0):,}M")
     with col_s2:
-        st.metric(f"{forecast_years}-yr baseline", f"{round(future_baseline[-1], 1):,}M", delta=f"{round(future_baseline[-1] - pop, 1):+.1f}M")
+        st.metric(f"{forecast_years}-yr baseline", f"{round(future_baseline[-1], 1):,}M", delta=f"{round(future_baseline[-1] - base_profile.get('population_mn', 0), 1):+.1f}M")
     with col_s3:
         if fertility_adj != 0.0 or migration_adj != 0:
             st.metric(f"{forecast_years}-yr scenario", f"{round(future_scenario[-1], 1):,}M", delta=f"{round(future_scenario[-1] - future_baseline[-1], 1):+.1f}M vs baseline", delta_color="normal" if future_scenario[-1] >= future_baseline[-1] else "inverse")
@@ -339,11 +407,14 @@ with forecast_tab:
     st.subheader("Sector workforce forecast")
     st.markdown(f"*Projected sector sizes under current trajectory — {country}*")
 
+    base_labor = base_profile.get("labor_force_mn", 0)
+    base_pop = base_profile.get("population_mn", 1)
+    base_participation = (base_labor / base_pop * 100) if base_pop else 0
     sector_forecast_data = []
     for sector, key in [("Primary", "primary_sector_pct"), ("Secondary", "secondary_sector_pct"), ("Tertiary", "tertiary_sector_pct"), ("Quaternary", "quaternary_sector_pct")]:
-        base_pct = profile.get(key, 0)
-        current_mn = round(labor * base_pct / 100, 1)
-        future_labor_base = future_baseline[-1] * participation / 100
+        base_pct = base_profile.get(key, 0)
+        current_mn = round(base_labor * base_pct / 100, 1)
+        future_labor_base = future_baseline[-1] * base_participation / 100
         future_pct = base_pct + {
             "Primary": -0.5 * forecast_years / 5,
             "Secondary": 0.2 * forecast_years / 5,
@@ -388,7 +459,7 @@ with forecast_tab:
 with compare_tab:
     st.markdown("<h3 style='margin-bottom:1rem;'>🌍 Demographic Comparison</h3>", unsafe_allow_html=True)
 
-    st.markdown(f"**{country} vs {compare_country}**")
+    st.markdown(f"**{country} scenario ({scenario_year}) vs {compare_country} baseline**")
 
     comp_data = {
         "Indicator": [
