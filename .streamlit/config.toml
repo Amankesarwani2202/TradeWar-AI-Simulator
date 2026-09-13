@@ -1,5 +1,5 @@
 [theme]
-base = "dark"
+# Leave the base unset so Streamlit can use the user's selected light/dark theme.
 primaryColor = "#60a5fa"
 showSidebarBorder = true
 
