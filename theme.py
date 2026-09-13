@@ -2,7 +2,7 @@ import streamlit as st
 
 
 def current_theme_type():
-    """Return Streamlit's currently active light/dark theme."""
+    """Return Streamlit's active light/dark theme."""
     try:
         theme_type = st.context.theme.type
         if theme_type in ("dark", "light"):
@@ -19,33 +19,24 @@ def current_theme_type():
 
 
 def theme_colors():
-    """Return concrete Plotly-safe colors for the active Streamlit theme.
-
-    Plotly SVG text is rendered separately from the surrounding Streamlit DOM,
-    so CSS variables cannot reliably recolor it. These concrete values are
-    applied directly to Plotly's layout/trace properties.
-    """
     if current_theme_type() == "light":
         return {
-            "background": "#FFFFFF",
-            "secondary": "#F0F2F6",
-            "text": "#31333F",
-            "muted": "#6B7280",
-            "border": "#D1D5DB",
-            "grid": "#E5E7EB",
+            "background": "#FFFFFF", "secondary": "#F0F2F6", "text": "#31333F",
+            "muted": "#6B7280", "border": "#D1D5DB", "grid": "#E5E7EB",
         }
     return {
-        "background": "#0E1117",
-        "secondary": "#262730",
-        "text": "#FAFAFA",
-        "muted": "#B8C0CC",
-        "border": "#3B4252",
-        "grid": "#343B4A",
+        "background": "#0E1117", "secondary": "#262730", "text": "#FAFAFA",
+        "muted": "#B8C0CC", "border": "#3B4252", "grid": "#343B4A",
     }
 
 
 def apply_plotly_theme(fig):
-    """Apply the active Streamlit light/dark theme to a Plotly figure."""
+    """Apply concrete theme colors directly to Plotly figures.
+
+    Plotly charts render their SVG separately from Streamlit's DOM, so relying
+    on CSS alone is unreliable. Direct figure styling keeps every chart readable
+    in both light and dark mode.
+    """
     colors = theme_colors()
     fig.update_layout(
         template="plotly",
@@ -61,20 +52,14 @@ def apply_plotly_theme(fig):
         ),
     )
     fig.update_xaxes(
-        title_font=dict(color=colors["text"]),
-        tickfont=dict(color=colors["text"]),
-        gridcolor=colors["grid"],
-        zerolinecolor=colors["grid"],
-        linecolor=colors["border"],
-        color=colors["text"],
+        title_font=dict(color=colors["text"]), tickfont=dict(color=colors["text"]),
+        gridcolor=colors["grid"], zerolinecolor=colors["grid"],
+        linecolor=colors["border"], color=colors["text"],
     )
     fig.update_yaxes(
-        title_font=dict(color=colors["text"]),
-        tickfont=dict(color=colors["text"]),
-        gridcolor=colors["grid"],
-        zerolinecolor=colors["grid"],
-        linecolor=colors["border"],
-        color=colors["text"],
+        title_font=dict(color=colors["text"]), tickfont=dict(color=colors["text"]),
+        gridcolor=colors["grid"], zerolinecolor=colors["grid"],
+        linecolor=colors["border"], color=colors["text"],
     )
 
     for trace in fig.data:
@@ -103,37 +88,49 @@ def apply_plotly_theme(fig):
     for annotation in list(fig.layout.annotations) if fig.layout.annotations else []:
         existing_font = annotation.font.to_plotly_json() if annotation.font else {}
         annotation.font = dict(**existing_font, color=colors["text"])
-
     return fig
 
 
 def patch_streamlit_plotly_chart():
-    """Theme every Plotly chart, including charts that don't call the helper.
-
-    This is intentionally installed once when theme.py is imported. It keeps
-    existing pages unchanged while ensuring charts such as Demographics, which
-    previously used plotly_white/plotly_dark directly, also follow the active
-    Streamlit theme.
-    """
+    """Theme all Streamlit Plotly charts, including charts with local templates."""
     if getattr(st, "_trade_war_plotly_theme_patched", False):
         return
 
-    original_plotly_chart = st.plotly_chart
+    # Patch DeltaGenerator.plotly_chart rather than only st.plotly_chart. This is
+    # the actual method used by Streamlit's st.plotly_chart API and is reliable
+    # across multipage apps and Streamlit reruns.
+    try:
+        from streamlit.delta_generator import DeltaGenerator
+        original_plotly_chart = DeltaGenerator.plotly_chart
 
-    def themed_plotly_chart(figure_or_data, *args, **kwargs):
-        try:
-            if hasattr(figure_or_data, "update_layout") and hasattr(figure_or_data, "data"):
-                figure_or_data = apply_plotly_theme(figure_or_data)
-        except Exception:
-            pass
-        return original_plotly_chart(figure_or_data, *args, **kwargs)
+        def themed_plotly_chart(self, figure_or_data, *args, **kwargs):
+            try:
+                if hasattr(figure_or_data, "update_layout") and hasattr(figure_or_data, "data"):
+                    figure_or_data = apply_plotly_theme(figure_or_data)
+            except Exception:
+                pass
+            return original_plotly_chart(self, figure_or_data, *args, **kwargs)
 
-    st.plotly_chart = themed_plotly_chart
+        DeltaGenerator.plotly_chart = themed_plotly_chart
+    except Exception:
+        # Keep the fallback for Streamlit versions exposing the function directly.
+        original_plotly_chart = st.plotly_chart
+
+        def themed_plotly_chart(figure_or_data, *args, **kwargs):
+            try:
+                if hasattr(figure_or_data, "update_layout") and hasattr(figure_or_data, "data"):
+                    figure_or_data = apply_plotly_theme(figure_or_data)
+            except Exception:
+                pass
+            return original_plotly_chart(figure_or_data, *args, **kwargs)
+
+        st.plotly_chart = themed_plotly_chart
+
     st._trade_war_plotly_theme_patched = True
 
 
 def inject_css():
-    """Inject CSS that follows Streamlit's active theme for normal UI."""
+    """Inject CSS for normal Streamlit UI and Plotly fallbacks."""
     css = """
     <style>
         :root {
@@ -169,11 +166,7 @@ def inject_css():
         }
         .tw-panel-inner p, .tw-panel-inner span { color:var(--app-text); }
         .tw-panel-inner .tw-muted { color:var(--app-muted) !important; }
-        .tw-hint {
-            background:var(--app-secondary) !important;
-            padding:.5rem .75rem;
-            border-radius:.4rem;
-        }
+        .tw-hint { background:var(--app-secondary) !important; padding:.5rem .75rem; border-radius:.4rem; }
         .tw-hint p { color:inherit; }
         .tw-muted { color:var(--app-muted) !important; }
         .js-plotly-plot .plotly svg text,
@@ -196,4 +189,5 @@ def inject_css():
     st.markdown(css, unsafe_allow_html=True)
 
 
+# Install the patch as soon as the module is imported so all pages are covered.
 patch_streamlit_plotly_chart()
