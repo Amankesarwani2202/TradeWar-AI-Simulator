@@ -50,22 +50,79 @@ def render_visitor_counter():
             const labels = document.querySelectorAll('.visitor-label');
             const values = document.querySelectorAll('#total-visits, #today-visits');
 
+            function firstNonEmpty(values) {{
+                for (const value of values) {{
+                    if (value && value.trim()) return value.trim();
+                }}
+                return '';
+            }}
+
             function syncTheme() {{
                 try {{
-                    const root = window.parent.document.documentElement;
-                    const styles = window.parent.getComputedStyle(root);
-                    const text = styles.getPropertyValue('--st-text-color').trim();
-                    const border = styles.getPropertyValue('--st-border-color').trim();
-                    const muted = styles.getPropertyValue('--st-gray-text-color').trim();
-                    const background = styles.getPropertyValue('--st-background-color').trim();
+                    const parentDoc = window.parent.document;
+                    const root = parentDoc.documentElement;
+                    const body = parentDoc.body;
+                    const app = parentDoc.querySelector('[data-testid="stApp"]') || parentDoc.querySelector('.stApp');
+                    const appView = parentDoc.querySelector('[data-testid="stAppViewContainer"]');
+
+                    const rootStyles = window.parent.getComputedStyle(root);
+                    const bodyStyles = window.parent.getComputedStyle(body);
+                    const appStyles = app ? window.parent.getComputedStyle(app) : null;
+                    const appViewStyles = appView ? window.parent.getComputedStyle(appView) : null;
+
+                    const text = firstNonEmpty([
+                        rootStyles.getPropertyValue('--st-text-color'),
+                        bodyStyles.getPropertyValue('--st-text-color'),
+                        appStyles && appStyles.getPropertyValue('--st-text-color'),
+                        appViewStyles && appViewStyles.getPropertyValue('--st-text-color')
+                    ]);
+                    const border = firstNonEmpty([
+                        rootStyles.getPropertyValue('--st-border-color'),
+                        bodyStyles.getPropertyValue('--st-border-color'),
+                        appStyles && appStyles.getPropertyValue('--st-border-color'),
+                        appViewStyles && appViewStyles.getPropertyValue('--st-border-color')
+                    ]);
+                    const muted = firstNonEmpty([
+                        rootStyles.getPropertyValue('--st-gray-text-color'),
+                        bodyStyles.getPropertyValue('--st-gray-text-color'),
+                        appStyles && appStyles.getPropertyValue('--st-gray-text-color'),
+                        appViewStyles && appViewStyles.getPropertyValue('--st-gray-text-color')
+                    ]);
+                    const background = firstNonEmpty([
+                        rootStyles.getPropertyValue('--st-background-color'),
+                        bodyStyles.getPropertyValue('--st-background-color'),
+                        appStyles && appStyles.getPropertyValue('--st-background-color'),
+                        appViewStyles && appViewStyles.getPropertyValue('--st-background-color')
+                    ]);
+
+                    const actualBackground = appViewStyles && appViewStyles.backgroundColor && appViewStyles.backgroundColor !== 'rgba(0, 0, 0, 0)'
+                        ? appViewStyles.backgroundColor
+                        : (appStyles && appStyles.backgroundColor && appStyles.backgroundColor !== 'rgba(0, 0, 0, 0)' ? appStyles.backgroundColor : bodyStyles.backgroundColor);
+                    const actualText = appStyles && appStyles.color ? appStyles.color : bodyStyles.color;
 
                     if (text) {{
                         card.style.color = text;
                         values.forEach((el) => el.style.color = text);
+                    }} else if (actualText) {{
+                        card.style.color = actualText;
+                        values.forEach((el) => el.style.color = actualText);
                     }}
                     if (border) stats.forEach((el) => el.style.borderColor = border);
                     if (muted) labels.forEach((el) => el.style.color = muted);
                     if (background) card.style.backgroundColor = background;
+
+                    if (!text || !border || !muted || !background) {{
+                        const rgb = actualBackground.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
+                        if (rgb) {{
+                            const luminance = (0.299 * Number(rgb[1]) + 0.587 * Number(rgb[2]) + 0.114 * Number(rgb[3])) / 255;
+                            const fallbackText = luminance < 0.5 ? '#e5e7eb' : '#111827';
+                            const fallbackMuted = luminance < 0.5 ? '#9ca3af' : '#64748b';
+                            const fallbackBorder = luminance < 0.5 ? '#334155' : '#e2e8f0';
+                            if (!text) {{ card.style.color = fallbackText; values.forEach((el) => el.style.color = fallbackText); }}
+                            if (!muted) labels.forEach((el) => el.style.color = fallbackMuted);
+                            if (!border) stats.forEach((el) => el.style.borderColor = fallbackBorder);
+                        }}
+                    }}
                 }} catch (error) {{
                     console.debug('Visitor counter theme sync:', error);
                 }}
