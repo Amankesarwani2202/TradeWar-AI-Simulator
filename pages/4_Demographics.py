@@ -126,22 +126,35 @@ def classify_demographic(profile):
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 st.sidebar.markdown("<h2 style='font-size:1.4rem;margin-bottom:1rem;'>👥 Demographic Settings</h2>", unsafe_allow_html=True)
 
-country = st.sidebar.selectbox("Select country", COUNTRIES)
-profile = COUNTRY_PROFILES.get(country, {})
+# Explicit keys keep the demographic controls stable and make their values
+# unambiguous across reruns of this multipage Streamlit application.
+country = st.sidebar.selectbox("Select country", COUNTRIES, key="demographics_country")
+profile = dict(COUNTRY_PROFILES.get(country, {}))
 
-compare_country = st.sidebar.selectbox("Compare with", [c for c in COUNTRIES if c != country])
+compare_options = [c for c in COUNTRIES if c != country]
+if st.session_state.get("demographics_compare_country") not in compare_options:
+    st.session_state["demographics_compare_country"] = compare_options[0]
+compare_country = st.sidebar.selectbox("Compare with", compare_options, key="demographics_compare_country")
+compare_profile = dict(COUNTRY_PROFILES.get(compare_country, {}))
 
 st.sidebar.divider()
 st.sidebar.markdown("**Population scenario parameters**")
 fertility_adj = st.sidebar.slider(
     "Fertility rate adjustment (%/yr)", min_value=-2.0, max_value=2.0, value=0.0, step=0.1,
-    help="Positive = higher birth rate; negative = lower birth rate"
+    help="Positive = higher birth rate; negative = lower birth rate", key="demographics_fertility"
 )
 migration_adj = st.sidebar.slider(
     "Net migration (thousands/yr)", min_value=-500, max_value=500, value=0, step=50,
-    help="Positive = net inflow; negative = net outflow"
+    help="Positive = net inflow; negative = net outflow", key="demographics_migration"
 )
-forecast_years = st.sidebar.slider("Forecast horizon (years)", min_value=5, max_value=30, value=15, step=5)
+forecast_years = st.sidebar.slider(
+    "Forecast horizon (years)", min_value=5, max_value=30, value=15, step=5,
+    key="demographics_forecast_years"
+)
+
+# A unique signature is used for chart keys so Plotly components are recreated
+# whenever user inputs change instead of retaining the previous chart instance.
+view_signature = f"{country}_{compare_country}_{fertility_adj}_{migration_adj}_{forecast_years}".replace(" ", "_")
 
 # ── Main content ─────────────────────────────────────────────────────────────
 st.title("👥 Demographics")
@@ -207,7 +220,11 @@ with overview_tab:
     col_pyramid, col_sector = st.columns(2, gap="large")
 
     with col_pyramid:
-        st.plotly_chart(build_population_pyramid(profile, country), use_container_width=True, key="overview_pyramid")
+        st.plotly_chart(
+            build_population_pyramid(profile, country),
+            use_container_width=True,
+            key=f"overview_pyramid_{view_signature}",
+        )
 
         age_dist = profile.get("age_distribution", {})
         working_age = age_dist.get("15-29", 0) + age_dist.get("30-44", 0) + age_dist.get("45-59", 0)
@@ -222,7 +239,11 @@ with overview_tab:
         )
 
     with col_sector:
-        st.plotly_chart(build_sector_chart(profile, country), use_container_width=True, key="overview_sector")
+        st.plotly_chart(
+            build_sector_chart(profile, country),
+            use_container_width=True,
+            key=f"overview_sector_{view_signature}",
+        )
 
         st.markdown("**Sector descriptions**")
         for sector, desc in SECTOR_DESCRIPTIONS.items():
@@ -301,7 +322,7 @@ with forecast_tab:
         xaxis_title="Year", yaxis_title="Population (millions)",
         template="plotly_dark", height=380,
     )
-    st.plotly_chart(fig_pop, use_container_width=True, key="forecast_population")
+    st.plotly_chart(fig_pop, use_container_width=True, key=f"forecast_population_{view_signature}")
 
     col_s1, col_s2, col_s3 = st.columns(3, gap="medium")
     with col_s1:
@@ -366,7 +387,6 @@ with forecast_tab:
 
 with compare_tab:
     st.markdown("<h3 style='margin-bottom:1rem;'>🌍 Demographic Comparison</h3>", unsafe_allow_html=True)
-    compare_profile = COUNTRY_PROFILES.get(compare_country, {})
 
     st.markdown(f"**{country} vs {compare_country}**")
 
@@ -394,15 +414,15 @@ with compare_tab:
     st.markdown("<br/>", unsafe_allow_html=True)
     col_pyr1, col_pyr2 = st.columns(2, gap="large")
     with col_pyr1:
-        st.plotly_chart(build_population_pyramid(profile, country), use_container_width=True, key="compare_pyramid_main")
+        st.plotly_chart(build_population_pyramid(profile, country), use_container_width=True, key=f"compare_pyramid_main_{view_signature}")
     with col_pyr2:
-        st.plotly_chart(build_population_pyramid(compare_profile, compare_country), use_container_width=True, key="compare_pyramid_compare")
+        st.plotly_chart(build_population_pyramid(compare_profile, compare_country), use_container_width=True, key=f"compare_pyramid_compare_{view_signature}")
 
     col_sec1, col_sec2 = st.columns(2, gap="large")
     with col_sec1:
-        st.plotly_chart(build_sector_chart(profile, country), use_container_width=True, key="compare_sector_main")
+        st.plotly_chart(build_sector_chart(profile, country), use_container_width=True, key=f"compare_sector_main_{view_signature}")
     with col_sec2:
-        st.plotly_chart(build_sector_chart(compare_profile, compare_country), use_container_width=True, key="compare_sector_compare")
+        st.plotly_chart(build_sector_chart(compare_profile, compare_country), use_container_width=True, key=f"compare_sector_compare_{view_signature}")
 
     st.markdown("<br/>", unsafe_allow_html=True)
     phase_a, _, c_a, b_a = classify_demographic(profile)
