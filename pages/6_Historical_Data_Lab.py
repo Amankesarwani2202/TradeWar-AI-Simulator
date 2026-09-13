@@ -61,8 +61,30 @@ st.subheader("2. Descriptive statistics")
 st.dataframe(df.describe(include="all").T, use_container_width=True)
 if len(df) >= 3:
     numeric = df.select_dtypes(include=np.number)
-    correlation_fig = px.imshow(numeric.corr(), text_auto=True, aspect="auto", title="Correlation matrix")
-    correlation_fig.update_layout(margin=dict(l=80, r=80, t=75, b=70), coloraxis_showscale=False)
+    corr = numeric.corr()
+    correlation_fig = px.imshow(corr, text_auto=False, aspect="auto", title="Correlation matrix")
+
+    # Use per-cell annotation colors so values remain readable on both the
+    # light and dark portions of the heatmap. A single text color (especially
+    # white) becomes invisible on the light cells in dark mode.
+    for row_idx, row_name in enumerate(corr.index):
+        for col_idx, col_name in enumerate(corr.columns):
+            value = float(corr.iloc[row_idx, col_idx])
+            text_color = "#FFFFFF" if value < -0.25 else "#111827"
+            correlation_fig.add_annotation(
+                x=col_idx,
+                y=row_idx,
+                text=f"{value:.6f}",
+                showarrow=False,
+                font=dict(color=text_color, size=14),
+                xanchor="center",
+                yanchor="middle",
+            )
+
+    correlation_fig.update_layout(
+        margin=dict(l=80, r=80, t=75, b=70),
+        coloraxis_showscale=False,
+    )
     st.plotly_chart(apply_plotly_theme(correlation_fig), use_container_width=True)
 
 st.divider()
