@@ -36,9 +36,6 @@ def inject_css():
 def is_dark_theme():
     """Return the active Streamlit theme selected by the user."""
     try:
-        # st.context.theme.type reflects the active light/dark theme selected
-        # in Streamlit Settings and is preferable to reading theme.base from
-        # config.toml, which is only the default/inheritance base.
         return st.context.theme.type == "dark"
     except Exception:
         try:
@@ -51,13 +48,12 @@ def get_theme_colors():
     return DARK_COLORS if is_dark_theme() else LIGHT_COLORS
 
 
-# Backwards-compatible helper used by existing visualization modules.
 def theme_colors():
     return get_theme_colors()
 
 
 def apply_plotly_theme(fig: Figure) -> Figure:
-    """Apply the active Streamlit theme to Plotly figures."""
+    """Apply the active Streamlit theme plus safe spacing to Plotly figures."""
     colors = get_theme_colors()
 
     fig.update_layout(
@@ -65,7 +61,16 @@ def apply_plotly_theme(fig: Figure) -> Figure:
         plot_bgcolor=colors["background"],
         font=dict(color=colors["text"]),
         title_font=dict(color=colors["text"]),
-        legend=dict(font=dict(color=colors["text"])),
+        margin=dict(l=70, r=115, t=80, b=65),
+        legend=dict(
+            font=dict(color=colors["text"]),
+            orientation="h",
+            yanchor="bottom",
+            y=1.01,
+            xanchor="left",
+            x=0,
+            traceorder="normal",
+        ),
     )
 
     try:
@@ -75,6 +80,7 @@ def apply_plotly_theme(fig: Figure) -> Figure:
             gridcolor=colors["grid"],
             zerolinecolor=colors["grid"],
             linecolor=colors["border"],
+            automargin=True,
         )
         fig.update_yaxes(
             title_font=dict(color=colors["text"]),
@@ -82,6 +88,7 @@ def apply_plotly_theme(fig: Figure) -> Figure:
             gridcolor=colors["grid"],
             zerolinecolor=colors["grid"],
             linecolor=colors["border"],
+            automargin=True,
         )
     except Exception:
         pass
@@ -98,29 +105,43 @@ def apply_plotly_theme(fig: Figure) -> Figure:
             except Exception:
                 pass
 
-        try:
-            cb = getattr(getattr(trace, "marker", None), "colorbar", None)
-            if cb is not None:
+        for cb in (
+            getattr(getattr(trace, "marker", None), "colorbar", None),
+            getattr(trace, "colorbar", None),
+        ):
+            try:
+                if cb is None:
+                    continue
                 title_text = cb.title.text if cb.title and cb.title.text else ""
                 cb.title = dict(text=title_text, font=dict(color=colors["text"]))
-                cb.tickfont = dict(color=colors["text"])
+                cb.tickfont = dict(color=colors["text"], size=10)
                 cb.outlinecolor = colors["border"]
-        except Exception:
-            pass
+                cb.nticks = 5
+                cb.len = 0.72
+                cb.x = 1.04
+                cb.xanchor = "left"
+                cb.y = 0.5
+                cb.yanchor = "middle"
+                cb.ticklabeloverflow = "hide past div"
+            except Exception:
+                pass
 
-        try:
-            cb = getattr(trace, "colorbar", None)
-            if cb is not None:
-                title_text = cb.title.text if cb.title and cb.title.text else ""
-                cb.title = dict(text=title_text, font=dict(color=colors["text"]))
-                cb.tickfont = dict(color=colors["text"])
-                cb.outlinecolor = colors["border"]
-        except Exception:
-            pass
+    # Plotly Express figures can use a shared layout.coloraxis colorbar.
+    try:
+        coloraxis = fig.layout.coloraxis
+        if coloraxis and coloraxis.colorbar:
+            coloraxis.colorbar.tickfont = dict(color=colors["text"], size=10)
+            coloraxis.colorbar.outlinecolor = colors["border"]
+            coloraxis.colorbar.nticks = 5
+            coloraxis.colorbar.len = 0.72
+            coloraxis.colorbar.x = 1.04
+            coloraxis.colorbar.xanchor = "left"
+            coloraxis.colorbar.y = 0.5
+            coloraxis.colorbar.yanchor = "middle"
+    except Exception:
+        pass
 
     for annotation in list(fig.layout.annotations) if fig.layout.annotations else []:
-        # Preserve explicit annotation colors, such as per-cell colors in the
-        # Historical Data Lab correlation matrix.
         try:
             existing_font = annotation.font.to_plotly_json() if annotation.font else {}
             if "color" not in existing_font:
@@ -146,8 +167,6 @@ def patch_streamlit_plotly_chart():
     def themed_plotly_chart(figure_or_data, *args, **kwargs):
         if isinstance(figure_or_data, Figure):
             figure_or_data = apply_plotly_theme(figure_or_data)
-            # Prevent Streamlit from applying a second, potentially conflicting
-            # Plotly theme after our explicit light/dark colors are applied.
             kwargs["theme"] = None
         return original_plotly_chart(figure_or_data, *args, **kwargs)
 
