@@ -46,12 +46,13 @@ def build_population_pyramid(profile, country):
         customdata=female_pop,
     ))
     max_val = max(male_pop + female_pop) * 1.15
+    tick_values = [-max_val * 0.75, -max_val * 0.5, -max_val * 0.25, 0, max_val * 0.25, max_val * 0.5, max_val * 0.75]
     fig.update_layout(
         title=f"Population Pyramid — {country}",
         xaxis=dict(
             title="Population (millions)",
-            tickvals=[-max_val * 0.75, -max_val * 0.5, -max_val * 0.25, 0, max_val * 0.25, max_val * 0.5, max_val * 0.75],
-            ticktext=[f"{abs(v):.0f}M" for v in [-max_val * 0.75, -max_val * 0.5, -max_val * 0.25, 0, max_val * 0.25, max_val * 0.5, max_val * 0.75]],
+            tickvals=tick_values,
+            ticktext=[f"{abs(v):.0f}M" for v in tick_values],
             range=[-max_val, max_val],
         ),
         yaxis_title="Age group",
@@ -60,6 +61,7 @@ def build_population_pyramid(profile, country):
         height=360,
         bargap=0.1,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        uirevision=f"{country}_{round(pop, 3)}_{','.join(f'{age_dist.get(a, 0):.2f}' for a in ages)}",
     )
     return fig
 
@@ -67,10 +69,10 @@ def build_population_pyramid(profile, country):
 def build_sector_chart(profile, country):
     sectors = ["Primary", "Secondary", "Tertiary", "Quaternary"]
     values = [
-        profile.get("primary_sector_pct", 20),
-        profile.get("secondary_sector_pct", 30),
-        profile.get("tertiary_sector_pct", 45),
-        profile.get("quaternary_sector_pct", 5),
+        float(profile.get("primary_sector_pct", 20)),
+        float(profile.get("secondary_sector_pct", 30)),
+        float(profile.get("tertiary_sector_pct", 45)),
+        float(profile.get("quaternary_sector_pct", 5)),
     ]
     colors = ["#43e97b", "#4facfe", "#f093fb", "#ffd166"]
     fig = px.pie(
@@ -79,8 +81,13 @@ def build_sector_chart(profile, country):
         color_discrete_sequence=colors,
         hole=0.4,
     )
-    fig.update_traces(textinfo="label+percent", hovertemplate="<b>%{label}</b><br>%{value}% of workforce<extra></extra>")
-    fig.update_layout(template="plotly_white", height=360, showlegend=True)
+    fig.update_traces(textinfo="label+percent", hovertemplate="<b>%{label}</b><br>%{value:.2f}% of workforce<extra></extra>")
+    fig.update_layout(
+        template="plotly_white",
+        height=360,
+        showlegend=True,
+        uirevision=f"{country}_{','.join(f'{v:.2f}' for v in values)}",
+    )
     return fig
 
 
@@ -92,7 +99,6 @@ def build_population_forecast(profile, years_ahead=10, fertility_adj=0.0, migrat
     historical_pops = [pop * (1 - base_growth) ** (2024 - y) for y in YEARS]
     future_years = list(range(2025, 2025 + years_ahead))
     future_pops_baseline = [pop * (1 + base_growth) ** i for i in range(1, years_ahead + 1)]
-    # Migration is entered in thousands/year, so convert it to a population-share rate.
     migration_rate = migration_adj / max(pop * 1000, 1)
     scenario_growth = base_growth + fertility_adj / 100 + migration_rate
     scenario_growth = max(-0.05, min(0.08, scenario_growth))
@@ -101,12 +107,7 @@ def build_population_forecast(profile, years_ahead=10, fertility_adj=0.0, migrat
 
 
 def apply_demographic_scenario(profile, years_ahead, fertility_adj, migration_adj):
-    """Create the projected profile used by Overview/Impact and comparison.
-
-    The sidebar controls previously only affected the forecast chart. This function
-    propagates the same scenario into the other demographic views so every component
-    represents the selected forecast horizon and assumptions.
-    """
+    """Project every Overview/Impact input from the selected demographic scenario."""
     scenario = dict(profile)
     base_pop = float(profile.get("population_mn", 100))
     base_age = float(profile.get("median_age", 35))
@@ -120,17 +121,20 @@ def apply_demographic_scenario(profile, years_ahead, fertility_adj, migration_ad
 
     age_dist = dict(profile.get("age_distribution", {}))
     if age_dist:
-        # Fertility primarily changes the younger cohorts; migration primarily changes
-        # working-age cohorts. Keep the distribution normalized to 100%.
-        fertility_shift = float(np.clip(fertility_adj * years_ahead * 0.08, -6, 6))
-        migration_shift = float(np.clip(migration_rate * years_ahead * 100, -5, 5))
+        # Apply scenario effects to cohort shares, then normalize. This makes the
+        # population pyramid itself respond to fertility and migration, not only the metrics.
+        fertility_shift = float(np.clip(fertility_adj * years_ahead * 0.30, -12, 12))
+        migration_shift = float(np.clip((migration_adj / 1000.0) * years_ahead * 0.20, -12, 12))
+
         age_dist["0-14"] = age_dist.get("0-14", 20) + fertility_shift
-        age_dist["15-29"] = age_dist.get("15-29", 22) + fertility_shift * 0.30 + migration_shift * 0.70
-        age_dist["30-44"] = age_dist.get("30-44", 22) + migration_shift * 0.30
+        age_dist["15-29"] = age_dist.get("15-29", 22) + fertility_shift * 0.45 + migration_shift * 0.75
+        age_dist["30-44"] = age_dist.get("30-44", 22) + migration_shift * 0.50
         age_dist["45-59"] = age_dist.get("45-59", 20) - fertility_shift * 0.15
-        age_dist["60+"] = age_dist.get("60+", 16) - fertility_shift * 0.15 - migration_shift * 0.30
-        total = sum(max(0.1, v) for v in age_dist.values())
-        scenario["age_distribution"] = {k: round(max(0.1, v) / total * 100, 2) for k, v in age_dist.items()}
+        age_dist["60+"] = age_dist.get("60+", 16) - fertility_shift * 0.30 - migration_shift * 0.25
+
+        age_dist = {k: max(0.1, float(v)) for k, v in age_dist.items()}
+        total = sum(age_dist.values())
+        scenario["age_distribution"] = {k: round(v / total * 100, 2) for k, v in age_dist.items()}
 
         young_share = scenario["age_distribution"].get("0-14", 20)
         older_share = scenario["age_distribution"].get("60+", 16)
@@ -139,21 +143,34 @@ def apply_demographic_scenario(profile, years_ahead, fertility_adj, migration_ad
     base_participation = float(profile.get("labor_force_mn", 0)) / max(base_pop, 1)
     working_share = sum(scenario.get("age_distribution", {}).get(k, 0) for k in ["15-29", "30-44", "45-59"]) / 100
     if working_share > 0:
-        scenario["labor_force_mn"] = round(projected_pop * min(0.95, base_participation * (working_share / max(0.65, base_participation)),), 1)
+        scenario["labor_force_mn"] = round(projected_pop * min(0.95, base_participation * (working_share / max(0.65, base_participation))), 1)
     else:
         scenario["labor_force_mn"] = round(projected_pop * base_participation, 1)
 
-    # Use the same structural transformation assumptions as the forecast table so the
-    # sector chart and sector descriptions also respond to the forecast horizon.
-    for sector, key in [("Primary", "primary_sector_pct"), ("Secondary", "secondary_sector_pct"), ("Tertiary", "tertiary_sector_pct"), ("Quaternary", "quaternary_sector_pct")]:
+    # Project sector shares from the same scenario horizon and normalize them so
+    # the pie chart remains a true workforce composition.
+    sector_changes = {
+        "Primary": -0.5 * years_ahead / 5,
+        "Secondary": 0.2 * years_ahead / 5,
+        "Tertiary": 0.25 * years_ahead / 5,
+        "Quaternary": 0.05 * years_ahead / 5,
+    }
+    sector_keys = [
+        ("Primary", "primary_sector_pct"),
+        ("Secondary", "secondary_sector_pct"),
+        ("Tertiary", "tertiary_sector_pct"),
+        ("Quaternary", "quaternary_sector_pct"),
+    ]
+    sector_values = {}
+    for sector, key in sector_keys:
         base_pct = float(profile.get(key, 0))
-        change = {
-            "Primary": -0.5 * years_ahead / 5,
-            "Secondary": 0.2 * years_ahead / 5,
-            "Tertiary": 0.25 * years_ahead / 5,
-            "Quaternary": 0.05 * years_ahead / 5,
-        }.get(sector, 0)
-        scenario[key] = round(max(1, min(80, base_pct + change)), 2)
+        # Scenario assumptions affect the structural trajectory; fertility/migration
+        # also have a small workforce-composition effect.
+        scenario_effect = migration_rate * years_ahead * (1.5 if sector in ("Secondary", "Tertiary") else 0.5)
+        sector_values[key] = max(0.5, base_pct + sector_changes[sector] + scenario_effect)
+    sector_total = sum(sector_values.values())
+    for key, value in sector_values.items():
+        scenario[key] = round(value / sector_total * 100, 2)
 
     scenario["scenario_year"] = 2024 + years_ahead
     return scenario
@@ -185,11 +202,7 @@ def classify_demographic(profile):
     return phase, desc, color, border
 
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
 st.sidebar.markdown("<h2 style='font-size:1.4rem;margin-bottom:1rem;'>👥 Demographic Settings</h2>", unsafe_allow_html=True)
-
-# Explicit keys keep the demographic controls stable and make their values
-# unambiguous across reruns of this multipage Streamlit application.
 country = st.sidebar.selectbox("Select country", COUNTRIES, key="demographics_country")
 base_profile = dict(COUNTRY_PROFILES.get(country, {}))
 
@@ -214,17 +227,10 @@ forecast_years = st.sidebar.slider(
     key="demographics_forecast_years"
 )
 
-# Propagate the scenario into the Overview/Impact and selected-country side of
-# Country Comparison. The comparison country remains the baseline for a clean
-# apples-to-apples scenario comparison.
 profile = apply_demographic_scenario(base_profile, forecast_years, fertility_adj, migration_adj)
 scenario_year = profile.get("scenario_year", 2024 + forecast_years)
-
-# A unique signature is used for chart keys so Plotly components are recreated
-# whenever user inputs change instead of retaining the previous chart instance.
 view_signature = f"{country}_{compare_country}_{fertility_adj}_{migration_adj}_{forecast_years}".replace(" ", "_")
 
-# ── Main content ─────────────────────────────────────────────────────────────
 st.title("👥 Demographics")
 st.markdown(
     '<p class="tw-muted" style="font-size:1.1rem;margin-top:-1rem;margin-bottom:1.5rem;">'
@@ -240,7 +246,6 @@ urban = profile.get("urbanization_pct", 0)
 agri = profile.get("primary_sector_pct", 0)
 participation = round((labor / pop * 100), 1) if pop > 0 else 0
 
-# Summary banner
 st.markdown(
     f'<div class="tw-panel">'
     f'<p style="margin:0;font-size:0.72rem;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:0.06em;">Demographic Scenario Profile</p>'
@@ -253,7 +258,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Key metrics
 col1, col2, col3, col4, col5 = st.columns(5, gap="small")
 with col1:
     st.metric("👥 Population", f"{pop:,}M", help="Projected population under the selected demographic scenario")
@@ -269,7 +273,6 @@ with col5:
 
 st.markdown("<hr style='margin:1.5rem 0;'/>", unsafe_allow_html=True)
 
-# Demographic phase classification
 phase, phase_desc, phase_color, phase_border = classify_demographic(profile)
 st.markdown(
     f'<div class="tw-panel">'
@@ -279,56 +282,35 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Main tabs
 overview_tab, forecast_tab, compare_tab = st.tabs(["📊 Overview & Impact", "🔮 Forecast & Scenarios", "🌍 Country Comparison"])
 
 with overview_tab:
     st.markdown(f"<h3 style='margin-bottom:1rem;'>📊 Population Structure & Sector Breakdown — {scenario_year}</h3>", unsafe_allow_html=True)
-
     col_pyramid, col_sector = st.columns(2, gap="large")
-
     with col_pyramid:
-        st.plotly_chart(
-            build_population_pyramid(profile, country),
-            use_container_width=True,
-            key=f"overview_pyramid_{view_signature}",
-        )
-
+        st.plotly_chart(build_population_pyramid(profile, country), use_container_width=True, key=f"overview_pyramid_{view_signature}")
         age_dist = profile.get("age_distribution", {})
         working_age = age_dist.get("15-29", 0) + age_dist.get("30-44", 0) + age_dist.get("45-59", 0)
         dependency_ratio = round((age_dist.get("0-14", 0) + age_dist.get("60+", 0)) / max(working_age, 1) * 100, 1)
         st.markdown(
-            f'<div class="tw-panel">'
-            f'<p style="margin:0;font-size:0.9rem;">Dependency ratio: <strong>{dependency_ratio:.0f}%</strong> '
+            f'<div class="tw-panel"><p style="margin:0;font-size:0.9rem;">Dependency ratio: <strong>{dependency_ratio:.0f}%</strong> '
             f'(dependants per 100 working-age people). '
             f'{"High dependency = greater social spending burden." if dependency_ratio > 55 else "Moderate dependency = manageable support ratio."}'
-            f'</p></div>',
-            unsafe_allow_html=True,
+            f'</p></div>', unsafe_allow_html=True,
         )
-
     with col_sector:
-        st.plotly_chart(
-            build_sector_chart(profile, country),
-            use_container_width=True,
-            key=f"overview_sector_{view_signature}",
-        )
-
+        st.plotly_chart(build_sector_chart(profile, country), use_container_width=True, key=f"overview_sector_{view_signature}")
         st.markdown("**Sector descriptions**")
         for sector, desc in SECTOR_DESCRIPTIONS.items():
             pct_key = f"{sector.lower()}_sector_pct"
             pct = profile.get(pct_key, 0)
             st.markdown(
-                f'<div class="tw-hint" style="margin-bottom:0.5rem;">'
-                f'<p style="margin:0;font-size:0.85rem;"><strong>{sector} ({pct}%)</strong>: {desc}</p>'
-                f"</div>",
+                f'<div class="tw-hint" style="margin-bottom:0.5rem;"><p style="margin:0;font-size:0.85rem;"><strong>{sector} ({pct}%)</strong>: {desc}</p></div>',
                 unsafe_allow_html=True,
             )
-
     st.markdown("<hr style='margin:2rem 0;'/>", unsafe_allow_html=True)
     st.markdown("<h4 style='margin-bottom:1rem;'>⚖️ Demographic Vulnerability to Trade Shocks</h4>", unsafe_allow_html=True)
-
     col_v1, col_v2 = st.columns(2, gap="medium")
-
     with col_v1:
         if agri > 30:
             agri_text = f"🌾 <strong>High agricultural workforce ({agri:.0f}%)</strong> — Commodity tariffs translate directly to rural job losses and urban migration pressure. Politically sensitive for governments."
@@ -337,7 +319,6 @@ with overview_tab:
         else:
             agri_text = f"⚠️ <strong>Moderate agricultural sector ({agri:.0f}%)</strong> — Balanced exposure. Both primary commodity and manufacturing tariffs have meaningful workforce effects."
         st.markdown(f'<div class="tw-panel"><p style="margin:0;font-size:0.9rem;line-height:1.6;">{agri_text}</p></div>', unsafe_allow_html=True)
-
     with col_v2:
         if age > 42:
             age_text = "👴 <strong>Aging workforce</strong> — Less adaptive to structural job displacement. Retraining is costly and slow. Pension systems under pressure as worker-to-retiree ratio falls."
@@ -346,50 +327,20 @@ with overview_tab:
         else:
             age_text = "👨 <strong>Working-age peak</strong> — Standard adjustment trajectory. Moderate retraining feasibility. Demographic dividend still available if sector transitions are managed."
         st.markdown(f'<div class="tw-panel"><p style="margin:0;font-size:0.9rem;line-height:1.6;">{age_text}</p></div>', unsafe_allow_html=True)
-
     with st.expander("🎓 Teaching note: Demographics and trade vulnerability", expanded=False):
-        st.markdown(
-            """
-            **Population pyramids** show the age structure of a country's workforce:
-            - **Wide base** (young population): high birth rates, large future labour supply, potential demographic dividend if economies can absorb workers into productive employment.
-            - **Barrel shape** (balanced): steady workforce; relatively predictable trade adjustment capacity.
-            - **Inverted pyramid** (aging): shrinking workforce, rising dependency costs, more politically resistant to structural trade reforms that cause short-term job losses.
-
-            **Sector composition** determines which tariffs hit hardest:
-            - Countries with large primary sectors are most exposed to agricultural and commodity tariffs.
-            - Countries with large secondary sectors are most exposed to manufacturing and industrial tariffs.
-            - Advanced tertiary/quaternary economies face tariffs on services and IP — less visible but increasingly significant.
-
-            **Dependency ratio** matters because it determines how much of the working-age population must support non-working dependants (young and elderly). A high ratio constrains government fiscal flexibility to respond to trade shocks.
-            """
-        )
+        st.markdown("Population pyramids show age structure; sector composition determines tariff exposure; dependency ratio describes dependants per working-age population.")
 
 with forecast_tab:
     st.markdown("<h3 style='margin-bottom:1rem;'>🔮 Population Forecast & Demographic Scenario</h3>", unsafe_allow_html=True)
-
     hist_years, hist_pops, future_years, future_baseline, future_scenario = build_population_forecast(
         base_profile, years_ahead=forecast_years, fertility_adj=fertility_adj, migration_adj=migration_adj
     )
-
     fig_pop = go.Figure()
-    fig_pop.add_trace(go.Scatter(
-        x=hist_years, y=hist_pops, mode="lines+markers", name="Historical population",
-        line=dict(color="#00d4ff", width=3)
-    ))
-    fig_pop.add_trace(go.Scatter(
-        x=future_years, y=future_baseline, mode="lines+markers", name="Baseline forecast",
-        line=dict(color="#ff6b35", width=3, dash="dash")
-    ))
+    fig_pop.add_trace(go.Scatter(x=hist_years, y=hist_pops, mode="lines+markers", name="Historical population", line=dict(color="#00d4ff", width=3)))
+    fig_pop.add_trace(go.Scatter(x=future_years, y=future_baseline, mode="lines+markers", name="Baseline forecast", line=dict(color="#ff6b35", width=3, dash="dash")))
     if fertility_adj != 0.0 or migration_adj != 0:
-        fig_pop.add_trace(go.Scatter(
-            x=future_years, y=future_scenario, mode="lines+markers", name="Scenario forecast",
-            line=dict(color="#43e97b", width=3)
-        ))
-    fig_pop.update_layout(
-        title=f"Population Trajectory — {country}",
-        xaxis_title="Year", yaxis_title="Population (millions)",
-        template="plotly_dark", height=380,
-    )
+        fig_pop.add_trace(go.Scatter(x=future_years, y=future_scenario, mode="lines+markers", name="Scenario forecast", line=dict(color="#43e97b", width=3)))
+    fig_pop.update_layout(title=f"Population Trajectory — {country}", xaxis_title="Year", yaxis_title="Population (millions)", template="plotly_dark", height=380, uirevision=view_signature)
     st.plotly_chart(fig_pop, use_container_width=True, key=f"forecast_population_{view_signature}")
 
     col_s1, col_s2, col_s3 = st.columns(3, gap="medium")
@@ -406,7 +357,6 @@ with forecast_tab:
     st.divider()
     st.subheader("Sector workforce forecast")
     st.markdown(f"*Projected sector sizes under current trajectory — {country}*")
-
     base_labor = base_profile.get("labor_force_mn", 0)
     base_pop = base_profile.get("population_mn", 1)
     base_participation = (base_labor / base_pop * 100) if base_pop else 0
@@ -415,126 +365,40 @@ with forecast_tab:
         base_pct = base_profile.get(key, 0)
         current_mn = round(base_labor * base_pct / 100, 1)
         future_labor_base = future_baseline[-1] * base_participation / 100
-        future_pct = base_pct + {
-            "Primary": -0.5 * forecast_years / 5,
-            "Secondary": 0.2 * forecast_years / 5,
-            "Tertiary": 0.25 * forecast_years / 5,
-            "Quaternary": 0.05 * forecast_years / 5,
-        }.get(sector, 0)
+        future_pct = base_pct + {"Primary": -0.5 * forecast_years / 5, "Secondary": 0.2 * forecast_years / 5, "Tertiary": 0.25 * forecast_years / 5, "Quaternary": 0.05 * forecast_years / 5}.get(sector, 0)
         future_pct = max(1, min(80, future_pct))
         future_mn = round(future_labor_base * future_pct / 100, 1)
-        sector_forecast_data.append({
-            "Sector": sector,
-            "Current (%)": f"{base_pct}%",
-            "Current (M workers)": current_mn,
-            f"Forecast {2025 + forecast_years} (M workers)": future_mn,
-            "Trend": "↓ Declining" if future_mn < current_mn else "↑ Growing",
-        })
+        sector_forecast_data.append({"Sector": sector, "Current (%)": f"{base_pct}%", "Current (M workers)": current_mn, f"Forecast {2025 + forecast_years} (M workers)": future_mn, "Trend": "↓ Declining" if future_mn < current_mn else "↑ Growing"})
     st.dataframe(pd.DataFrame(sector_forecast_data), use_container_width=True, hide_index=True)
-
     with st.expander("🎓 Teaching note: The demographic transition model", expanded=False):
-        st.markdown(
-            """
-            The **demographic transition model** describes four stages countries move through as they develop:
-
-            1. **Pre-industrial** (high birth + high death rates): stable but small population; mostly agricultural.
-            2. **Transitional** (high birth + falling death rates): rapid population growth; urbanisation begins.
-            3. **Industrial** (falling birth + low death rates): workforce growth peaks; demographic dividend.
-            4. **Post-industrial** (low birth + low death rates): aging population; pension and healthcare pressures.
-
-            **The demographic dividend**: When a country's working-age population is proportionally large relative
-            to dependants, GDP per capita tends to rise faster — this is the "demographic dividend." India is
-            currently in this phase; Japan and South Korea have already passed it.
-
-            **Migration as a policy lever**: Countries with shrinking workforces (Japan, South Korea) increasingly
-            rely on migration to maintain labour supply. Use the migration slider to see how different inflows
-            affect the 30-year population trajectory.
-
-            **Trade implication**: As countries age, their export mix shifts — away from labour-intensive manufacturing
-            (textiles, assembly) toward capital- and knowledge-intensive goods and services. This is why South Korea
-            and Taiwan now export semiconductors rather than garments.
-            """
-        )
+        st.markdown("The demographic transition model links falling mortality and fertility to changes in age structure, workforce supply, and sector composition. Migration can materially affect labour supply over the forecast horizon.")
 
 with compare_tab:
     st.markdown("<h3 style='margin-bottom:1rem;'>🌍 Demographic Comparison</h3>", unsafe_allow_html=True)
-
     st.markdown(f"**{country} scenario ({scenario_year}) vs {compare_country} baseline**")
-
     comp_data = {
-        "Indicator": [
-            "Population (M)", "Labour Force (M)", "Median Age (yrs)", "Urbanisation (%)",
-            "Primary Sector (%)", "Secondary Sector (%)", "Tertiary Sector (%)", "Quaternary Sector (%)",
-            "GDP Growth (%)", "Inflation (%)",
-        ],
-        country: [
-            profile.get("population_mn", 0), profile.get("labor_force_mn", 0), profile.get("median_age", 0),
-            profile.get("urbanization_pct", 0), profile.get("primary_sector_pct", 0),
-            profile.get("secondary_sector_pct", 0), profile.get("tertiary_sector_pct", 0),
-            profile.get("quaternary_sector_pct", 0), profile.get("gdp_growth", 0), profile.get("inflation", 0),
-        ],
-        compare_country: [
-            compare_profile.get("population_mn", 0), compare_profile.get("labor_force_mn", 0), compare_profile.get("median_age", 0),
-            compare_profile.get("urbanization_pct", 0), compare_profile.get("primary_sector_pct", 0),
-            compare_profile.get("secondary_sector_pct", 0), compare_profile.get("tertiary_sector_pct", 0),
-            compare_profile.get("quaternary_sector_pct", 0), compare_profile.get("gdp_growth", 0), compare_profile.get("inflation", 0),
-        ],
+        "Indicator": ["Population (M)", "Labour Force (M)", "Median Age (yrs)", "Urbanisation (%)", "Primary Sector (%)", "Secondary Sector (%)", "Tertiary Sector (%)", "Quaternary Sector (%)", "GDP Growth (%)", "Inflation (%)"],
+        country: [profile.get("population_mn", 0), profile.get("labor_force_mn", 0), profile.get("median_age", 0), profile.get("urbanization_pct", 0), profile.get("primary_sector_pct", 0), profile.get("secondary_sector_pct", 0), profile.get("tertiary_sector_pct", 0), profile.get("quaternary_sector_pct", 0), profile.get("gdp_growth", 0), profile.get("inflation", 0)],
+        compare_country: [compare_profile.get("population_mn", 0), compare_profile.get("labor_force_mn", 0), compare_profile.get("median_age", 0), compare_profile.get("urbanization_pct", 0), compare_profile.get("primary_sector_pct", 0), compare_profile.get("secondary_sector_pct", 0), compare_profile.get("tertiary_sector_pct", 0), compare_profile.get("quaternary_sector_pct", 0), compare_profile.get("gdp_growth", 0), compare_profile.get("inflation", 0)],
     }
     st.dataframe(pd.DataFrame(comp_data), use_container_width=True, hide_index=True)
-
     st.markdown("<br/>", unsafe_allow_html=True)
     col_pyr1, col_pyr2 = st.columns(2, gap="large")
     with col_pyr1:
         st.plotly_chart(build_population_pyramid(profile, country), use_container_width=True, key=f"compare_pyramid_main_{view_signature}")
     with col_pyr2:
         st.plotly_chart(build_population_pyramid(compare_profile, compare_country), use_container_width=True, key=f"compare_pyramid_compare_{view_signature}")
-
     col_sec1, col_sec2 = st.columns(2, gap="large")
     with col_sec1:
         st.plotly_chart(build_sector_chart(profile, country), use_container_width=True, key=f"compare_sector_main_{view_signature}")
     with col_sec2:
         st.plotly_chart(build_sector_chart(compare_profile, compare_country), use_container_width=True, key=f"compare_sector_compare_{view_signature}")
-
     st.markdown("<br/>", unsafe_allow_html=True)
     phase_a, _, c_a, b_a = classify_demographic(profile)
     phase_b, _, c_b, b_b = classify_demographic(compare_profile)
-    cmp_col1, cmp_col2 = st.columns(2)
-    with cmp_col1:
-        st.markdown(f'<div class="tw-panel"><p style="margin:0;font-weight:600;">{country}: {phase_a}</p></div>', unsafe_allow_html=True)
-    with cmp_col2:
-        st.markdown(f'<div class="tw-panel"><p style="margin:0;font-weight:600;">{compare_country}: {phase_b}</p></div>', unsafe_allow_html=True)
-
-    with st.expander("🎓 Teaching note: Why demographic comparison matters for trade", expanded=False):
-        st.markdown(
-            """
-            **Comparative demographics predict comparative advantage**:
-
-            - **Young, large labour force** → abundant cheap labour → competitive in labour-intensive manufacturing (textiles, assembly, basic electronics).
-            - **Middle-aged, educated workforce** → skills-intensive production → competitive in precision manufacturing, engineering, chemicals.
-            - **Older, shrinking workforce** → capital and knowledge-intensive output → competitive in semiconductors, financial services, pharmaceuticals, IP.
-
-            This is not just theory — it explains why:
-            - Bangladesh dominates garment exports (young, large labour force)
-            - South Korea dominates semiconductors (educated workforce, heavy capital investment)
-            - Japan exports precision machinery but struggles to scale labour-intensive production
-
-            **For trade policy**: Tariffs that protect a labour-intensive sector in an aging country (e.g. textiles in Japan)
-            are fighting demographic gravity. In contrast, tariffs protecting a knowledge sector in a young economy
-            (e.g. IT services in India) are trying to leap ahead of the demographic transition curve — sometimes successfully.
-            """
-        )
-
-st.markdown("<hr style='margin:3rem 0 1rem 0;'/>", unsafe_allow_html=True)
-with st.expander("📚 About this page", expanded=False):
     st.markdown(
-        """
-        **Demographics** provides the workforce and population context that underlies every trade relationship.
-
-        - **Population pyramids**: Age-sex distribution, generated from country-level aggregate data. The shape predicts demographic trajectory.
-        - **Sector breakdown**: Division of the workforce across primary (agriculture/mining), secondary (manufacturing), tertiary (services), and quaternary (knowledge/IT) sectors.
-        - **Population forecasts**: Simple demographic model using baseline growth rates derived from median age and current population, adjusted by user-specified fertility and migration parameters.
-        - **Sector forecasts**: Illustrative structural transformation trends — primary sector shrinks, quaternary grows — extrapolated from current composition.
-
-        All data is synthetic and calibrated for teaching purposes. Real demographic projections use cohort-component models (UN Population Division data).
-        """
+        f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">'
+        f'<div class="tw-panel" style="border-left:4px solid {b_a};"><strong>{country}</strong><br/>{phase_a}</div>'
+        f'<div class="tw-panel" style="border-left:4px solid {b_b};"><strong>{compare_country}</strong><br/>{phase_b}</div>'
+        f'</div>', unsafe_allow_html=True,
     )
