@@ -93,7 +93,21 @@ def apply_plotly_theme(fig: Figure) -> Figure:
     except Exception:
         pass
 
+    is_forecast_trajectory = False
+    try:
+        title_text = fig.layout.title.text if fig.layout.title else ""
+        is_forecast_trajectory = bool(title_text and str(title_text).startswith("Export Trajectory"))
+    except Exception:
+        pass
+
     for trace in fig.data:
+        if is_forecast_trajectory:
+            try:
+                if getattr(trace, "marker", None) is not None:
+                    trace.marker.showscale = False
+            except Exception:
+                pass
+
         for attr in ("textfont", "insidetextfont", "outside_textfont"):
             try:
                 current = getattr(trace, attr, None)
@@ -111,6 +125,8 @@ def apply_plotly_theme(fig: Figure) -> Figure:
         ):
             try:
                 if cb is None:
+                    continue
+                if is_forecast_trajectory:
                     continue
                 title_text = cb.title.text if cb.title and cb.title.text else ""
                 cb.title = dict(text=title_text, font=dict(color=colors["text"]))
@@ -130,14 +146,17 @@ def apply_plotly_theme(fig: Figure) -> Figure:
     try:
         coloraxis = fig.layout.coloraxis
         if coloraxis and coloraxis.colorbar:
-            coloraxis.colorbar.tickfont = dict(color=colors["text"], size=10)
-            coloraxis.colorbar.outlinecolor = colors["border"]
-            coloraxis.colorbar.nticks = 5
-            coloraxis.colorbar.len = 0.72
-            coloraxis.colorbar.x = 1.04
-            coloraxis.colorbar.xanchor = "left"
-            coloraxis.colorbar.y = 0.5
-            coloraxis.colorbar.yanchor = "middle"
+            if is_forecast_trajectory:
+                coloraxis.showscale = False
+            else:
+                coloraxis.colorbar.tickfont = dict(color=colors["text"], size=10)
+                coloraxis.colorbar.outlinecolor = colors["border"]
+                coloraxis.colorbar.nticks = 5
+                coloraxis.colorbar.len = 0.72
+                coloraxis.colorbar.x = 1.04
+                coloraxis.colorbar.xanchor = "left"
+                coloraxis.colorbar.y = 0.5
+                coloraxis.colorbar.yanchor = "middle"
     except Exception:
         pass
 
