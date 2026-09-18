@@ -62,8 +62,8 @@ def ask_tutor(question, context=None):
     model = _secret("GEMINI_MODEL", "gemini-3.6-flash")
     context = context or {}
 
-    system = """You are TradeWar AI Tutor, an economics teacher and application guide inside TradeWar AI Simulator.
-Explain economics in clear language suitable for students and researchers. Help users understand what the app is doing and how to use it.
+    system = """You are TradeWar AI, the general-purpose research assistant inside TradeWar AI Simulator.
+Answer questions related to international trade, tariffs, trade policy, economics, macroeconomics, financial markets, demographics, supply chains, historical trade shocks, and how the TradeWar AI Simulator works. For current or changing information, use Google Search grounding and cite useful sources. Prefer primary sources, official statistics, central banks, government agencies, international organizations, and reputable financial/news sources. Completely unrelated questions should be politely redirected back to the app topic.
 Never invent data, coefficients, market observations, or app capabilities. Treat the app's statistical/economic models as the source of quantitative results; AI is only an explanation layer.
 Distinguish observed data, model estimates, assumptions, scenarios and forecasts. Explain correlation versus causation and uncertainty when relevant.
 Do not give personalized investment advice. If asked for an investment recommendation, explain the relevant concepts and limitations instead.
@@ -94,10 +94,22 @@ QUESTION:
                     system_instruction=system,
                     temperature=0.3,
                     max_output_tokens=900,
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
                 ),
             )
             text = getattr(response, "text", None)
-            return text or "I received a response but could not extract the tutor text.", None
+            sources = []
+            try:
+                metadata = response.candidates[0].grounding_metadata
+                for chunk in getattr(metadata, "grounding_chunks", []) or []:
+                    web = getattr(chunk, "web", None)
+                    uri = getattr(web, "uri", None) if web else None
+                    title = getattr(web, "title", None) if web else None
+                    if uri and uri not in {item["url"] for item in sources}:
+                        sources.append({"title": title or uri, "url": uri})
+            except Exception:
+                sources = []
+            return {"text": text or "I received a response but could not extract the tutor text.", "sources": sources[:6]}, None
 
         except Exception as exc:
             last_error = exc
@@ -126,6 +138,107 @@ QUESTION:
 
     return None, f"The Gemini AI Tutor encountered an error: {message}"
 
+
+def render_global_chatbot():
+    """Render one app-wide floating TradeWar AI chatbot with web-grounded Gemini answers."""
+    history_key = "tradewar_global_chat_history"
+    input_key = "tradewar_global_chat_input"
+
+    if history_key not in st.session_state:
+        st.session_state[history_key] = []
+
+    st.markdown(
+        """
+        <style>
+        .st-key-tradewar-global-chatbot {
+            position: fixed !important;
+            right: 24px !important;
+            bottom: 24px !important;
+            z-index: 999999 !important;
+        }
+        .st-key-tradewar-global-chatbot > div { width: auto !important; }
+        .st-key-tradewar-global-chatbot button {
+            border-radius: 999px !important;
+            min-width: 52px !important;
+            width: 52px !important;
+            height: 52px !important;
+            padding: 0 !important;
+            box-shadow: 0 6px 22px rgba(0,0,0,.22) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    popover = st.popover(
+        "",
+        icon=":material/smart_toy:",
+        type="primary",
+        help="Ask TradeWar AI — web-grounded answers about trade, tariffs, economics and this simulator.",
+        width=430,
+        key="tradewar-global-chatbot",
+    )
+
+    with popover:
+        st.markdown("### 🤖 TradeWar AI")
+        st.caption(
+            "Ask about trade, tariffs, economics, markets, supply chains, macro data "
+            "or how this simulator works. Gemini can search the live web when needed."
+        )
+
+        if not ai_configured():
+            st.warning("Add GEMINI_API_KEY in Streamlit Secrets to enable the chatbot.")
+        else:
+            for message in st.session_state[history_key]:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["text"])
+                    if message.get("sources"):
+                        with st.expander("Sources"):
+                            for source in message["sources"]:
+                                st.markdown(f"- [{source['title']}]({source['url']})")
+
+            question = st.text_area(
+                "Ask a question",
+                key=input_key,
+                height=90,
+                placeholder="e.g. What are the latest US-China tariff developments?",
+                label_visibility="collapsed",
+            )
+
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                ask = st.button("Ask", type="primary", use_container_width=True, key="tradewar-global-chat-ask")
+            with col2:
+                clear = st.button("Clear", use_container_width=True, key="tradewar-global-chat-clear")
+
+            if clear:
+                st.session_state[history_key] = []
+                st.session_state[input_key] = ""
+                st.rerun()
+
+            if ask:
+                question = question.strip()
+                if not question:
+                    st.warning("Please enter a question.")
+                else:
+                    context = {
+                        "app": "TradeWar AI Simulator",
+                        "scope": "International trade, tariffs, trade policy, economics, macroeconomics, financial markets, demographics, supply chains, historical trade shocks, and simulator usage.",
+                    }
+                    with st.spinner("Searching the web and preparing an answer…"):
+                        result, error = ask_tutor(question, context)
+
+                    if error:
+                        st.error(error)
+                    else:
+                        st.session_state[history_key].append({"role": "user", "text": question})
+                        st.session_state[history_key].append({
+                            "role": "assistant",
+                            "text": result["text"],
+                            "sources": result.get("sources", []),
+                        })
+                        st.session_state[input_key] = ""
+                        st.rerun()
 
 def render_ai_tutor(page, context=None, suggestions=None):
     context = dict(context or {})
