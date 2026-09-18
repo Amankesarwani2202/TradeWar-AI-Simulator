@@ -105,6 +105,28 @@ def model_metrics(actual, predicted):
     return {"MAE": float(mean_absolute_error(actual, predicted)), "RMSE": rmse, "MAPE": mape, "R²": float(r2_score(actual, predicted))}
 
 
+
+def hide_chart_colorbars(fig):
+    """Ensure Historical Data Lab charts never render Plotly colorbars."""
+    fig.update_layout(coloraxis_showscale=False)
+    try:
+        fig.layout.coloraxis.showscale = False
+    except Exception:
+        pass
+    for trace in fig.data:
+        try:
+            if getattr(trace, "marker", None) is not None:
+                trace.marker.showscale = False
+                trace.marker.colorbar = None
+        except Exception:
+            pass
+        try:
+            trace.showscale = False
+            trace.colorbar = None
+        except Exception:
+            pass
+    return fig
+
 def make_plot(df, title="Historical exports and tariffs"):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -125,7 +147,7 @@ def make_plot(df, title="Historical exports and tariffs"):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         coloraxis_showscale=False,
     )
-    return fig
+    return hide_chart_colorbars(fig)
 
 
 def style_historical_chart(fig, legend=True):
