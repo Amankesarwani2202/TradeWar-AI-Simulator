@@ -58,17 +58,6 @@ if {"year", "exports_bn_usd"}.issubset(df.columns) and len(df):
     if len(ordered):
         latest_exports = float(ordered.iloc[-1]["exports_bn_usd"])
 
-render_ai_tutor("historical_data_lab", {
-    "rows": len(df),
-    "columns": list(df.columns),
-    "year_range": year_range,
-    "latest_exports_bn_usd": latest_exports,
-}, [
-    "What does my correlation matrix mean?",
-    "Explain my tariff coefficient in simple terms.",
-    "Does this analysis prove that tariffs cause exports to change?",
-])
-
 issues = validate_data(df)
 if issues:
     for issue in issues:
