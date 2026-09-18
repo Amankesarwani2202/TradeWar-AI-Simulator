@@ -37,7 +37,7 @@ def ask_tutor(question, context=None):
     if not key:
         return None, "AI Tutor is not configured yet. Add GEMINI_API_KEY to Streamlit secrets to enable it."
 
-    model = _secret("GEMINI_MODEL", "gemini-3.8-flash")
+    model = _secret("GEMINI_MODEL", "gemini-2.5-flash")
     context = context or {}
 
     system = """You are TradeWar AI Tutor, an economics teacher and application guide inside TradeWar AI Simulator.
