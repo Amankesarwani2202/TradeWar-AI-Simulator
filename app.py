@@ -164,7 +164,6 @@ def home():
     inject_css()
     st.sidebar.caption("🌗 **Theme:** use ⋮ → Settings → Theme to switch between the configured light and dark themes.")
     st.sidebar.caption(f"🌐 Macro data refresh: {live_timestamp()}")
-    render_global_chatbot()
 
     st.markdown("""<div style="padding:2rem 0 1.5rem;border-bottom:1px solid var(--st-border-color);margin-bottom:2rem"><h1>🌏 TradeWar AI Simulator</h1><p style="max-width:720px;line-height:1.65">Explore how tariffs and trade shocks reshape supply chains, financial markets and demographics. Macro, demographic, FX and market inputs are refreshed from live public sources where available.</p></div>""", unsafe_allow_html=True)
     render_visitor_counter()
@@ -192,4 +191,5 @@ pg = st.navigation({"": [st.Page(home, title="Home", icon="🏠", default=True)]
     st.Page("pages/5_Global_Market_Explorer.py", title="Global Market Explorer", icon="🌐"),
     st.Page("pages/4_Demographics.py", title="Demographics", icon="👥"),
 ]})
+render_global_chatbot()
 pg.run()
