@@ -13,7 +13,7 @@ MAX_RETRIES = 1
 RETRY_DELAYS = (2.0,)
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
 MAX_KNOWLEDGE_CHARS = 8000
-MAX_OUTPUT_TOKENS = 450
+MAX_OUTPUT_TOKENS = 800
 
 
 def _secret(name, default=None):
