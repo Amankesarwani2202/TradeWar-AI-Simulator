@@ -241,14 +241,6 @@ def render_global_chatbot():
         if not ai_configured():
             st.warning("Add GEMINI_API_KEY in Streamlit Secrets to enable the chatbot.")
         else:
-            for message in st.session_state[history_key]:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["text"])
-                    if message.get("sources"):
-                        with st.expander("Sources"):
-                            for source in message["sources"]:
-                                st.markdown(f"- [{source['title']}]({source['url']})")
-
             st.markdown("**Try asking:**")
             default_questions = [
                 "What happens to GDP when tariffs increase?",
@@ -282,6 +274,18 @@ def render_global_chatbot():
                 st.session_state[history_key] = []
                 st.session_state["tradewar_global_chat_clear_input"] = True
                 st.rerun()
+
+            # Show the conversation below the question controls so the latest
+            # answer appears underneath the text box rather than above it.
+            if st.session_state[history_key]:
+                st.divider()
+                for message in st.session_state[history_key]:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["text"])
+                        if message.get("sources"):
+                            with st.expander("Sources"):
+                                for source in message["sources"]:
+                                    st.markdown(f"- [{source['title']}]({source['url']})")
 
             if ask:
                 question = question.strip()
