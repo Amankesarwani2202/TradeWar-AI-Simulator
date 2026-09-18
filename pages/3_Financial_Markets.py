@@ -11,6 +11,13 @@ inject_css()
 st.title("💹 Financial Markets")
 st.caption("Live observed market data is kept separate from modelled trade-policy scenarios.")
 st.caption(f"Market refresh: {live_timestamp()} · Yahoo Finance is used for supported markets; Bangladesh DSE data uses the DSE adapter. Availability can vary by exchange/provider.")
+
+country = st.sidebar.selectbox("Country / market", list(MARKETS), key="financial_country")
+options = MARKETS[country]
+labels = {f"{name} ({ticker})": (name, ticker, kind) for name, ticker, kind in options}
+selected = st.sidebar.multiselect("Markets to compare", list(labels), default=list(labels)[:2], key="financial_markets")
+period = st.sidebar.selectbox("History", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=3, key="financial_period")
+
 render_learning_header("Financial markets", "Learn the market concepts behind the live data before interpreting a chart.")
 render_page_learning("financial")
 render_ai_tutor("financial_markets", {"country": country, "selected_markets": selected, "period": period}, [
@@ -18,12 +25,6 @@ render_ai_tutor("financial_markets", {"country": country, "selected_markets": se
     "What does volatility mean?",
     "How can tariffs affect financial markets?",
 ])
-
-country = st.sidebar.selectbox("Country / market", list(MARKETS), key="financial_country")
-options = MARKETS[country]
-labels = {f"{name} ({ticker})": (name, ticker, kind) for name, ticker, kind in options}
-selected = st.sidebar.multiselect("Markets to compare", list(labels), default=list(labels)[:2], key="financial_markets")
-period = st.sidebar.selectbox("History", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=3, key="financial_period")
 
 rows = []
 for label in selected:
