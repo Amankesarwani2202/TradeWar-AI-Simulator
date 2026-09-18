@@ -3,7 +3,6 @@ import streamlit as st
 from market_data import MARKETS, COMMON_ASSETS, download_history, summarize, live_timestamp
 from theme import inject_css, render_chart, make_line_figure
 from components.learning import render_learning_header, render_page_learning
-from ai_tutor import render_ai_tutor
 
 st.set_page_config(page_title="Global Market Explorer", page_icon="🌐", layout="wide")
 inject_css()
@@ -21,12 +20,6 @@ selected_labels = st.multiselect("Indices / markets to compare", list(market_lab
 
 render_learning_header("Global markets", "Understand indices, currencies and cross-market comparisons before drawing conclusions.")
 render_page_learning("global")
-render_ai_tutor("global_markets", {"country": country, "selected_markets": selected_labels, "period": period}, [
-    "What is the difference between these market indices?",
-    "Why should I compare percentage returns instead of index levels?",
-    "How can currency movements affect a global market comparison?",
-])
-
 rows = []
 charts = []
 for label in selected_labels:

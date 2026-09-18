@@ -4,7 +4,6 @@ import streamlit as st
 from utils import COUNTRY_PROFILES, inject_css
 from theme import apply_plotly_theme, render_chart, make_line_figure
 from components.learning import render_learning_header, render_page_learning
-from ai_tutor import render_ai_tutor
 from market_data import MARKETS, download_history, summarize, live_timestamp
 
 inject_css()
@@ -20,12 +19,6 @@ period = st.sidebar.selectbox("History", ["1mo", "3mo", "6mo", "1y", "2y", "5y"]
 
 render_learning_header("Financial markets", "Learn the market concepts behind the live data before interpreting a chart.")
 render_page_learning("financial")
-render_ai_tutor("financial_markets", {"country": country, "selected_markets": selected, "period": period}, [
-    "What is a market index?",
-    "What does volatility mean?",
-    "How can tariffs affect financial markets?",
-])
-
 rows = []
 for label in selected:
     name, ticker, kind = labels[label]

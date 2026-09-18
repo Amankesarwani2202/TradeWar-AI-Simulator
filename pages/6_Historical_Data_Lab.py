@@ -10,7 +10,6 @@ from historical_analysis import (
 )
 from theme import inject_css, apply_plotly_theme, render_chart
 from components.learning import render_learning_header, render_page_learning
-from ai_tutor import render_ai_tutor
 
 inject_css()
 st.title("🔬 Historical Data & Economics Lab")

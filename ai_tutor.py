@@ -125,22 +125,22 @@ QUESTION:
     lowered = message.lower()
 
     if "429" in message or "quota" in lowered or "rate limit" in lowered:
-        return None, "Gemini is temporarily rate-limited. I retried automatically; please try again in a few seconds."
+        return None, "The AI service is temporarily rate-limited. I retried automatically; please try again in a few seconds."
 
     if "503" in message or "unavailable" in lowered:
-        return None, "Gemini is temporarily busy. I retried automatically 3 times; please try again in a few seconds."
+        return None, "The AI service is temporarily busy. I retried automatically 3 times; please try again in a few seconds."
 
     if "api key" in lowered or "authentication" in lowered or "permission" in lowered:
-        return None, "Gemini authentication failed. Check the GEMINI_API_KEY in Streamlit secrets."
+        return None, "AI authentication failed. Check the configured API key in Streamlit Secrets."
 
     if "not found" in lowered or ("model" in lowered and "not found" in lowered):
-        return None, f"Gemini model '{model}' was not found. Check GEMINI_MODEL in Streamlit secrets."
+        return None, "The configured AI model was not found. Check the model setting in Streamlit Secrets."
 
-    return None, f"The Gemini AI Tutor encountered an error: {message}"
+    return None, f"The TradeWar AI assistant encountered an error: {message}"
 
 
 def render_global_chatbot():
-    """Render one app-wide floating TradeWar AI chatbot with web-grounded Gemini answers."""
+    """Render one app-wide floating TradeWar AI chatbot with live web-grounded answers."""
     history_key = "tradewar_global_chat_history"
     input_key = "tradewar_global_chat_input"
 
@@ -183,7 +183,7 @@ def render_global_chatbot():
         st.markdown("### 🤖 TradeWar AI")
         st.caption(
             "Ask about trade, tariffs, economics, markets, supply chains, macro data "
-            "or how this simulator works. Gemini can search the live web when needed."
+            "or how this simulator works. It can search the live web when needed."
         )
 
         if not ai_configured():
@@ -197,7 +197,22 @@ def render_global_chatbot():
                             for source in message["sources"]:
                                 st.markdown(f"- [{source['title']}]({source['url']})")
 
-            question = st.text_area(
+            st.markdown("**Try asking:**")
+        default_questions = [
+            "What happens to GDP when tariffs increase?",
+            "How do tariffs affect consumers and businesses?",
+            "What is the difference between a tariff and a quota?",
+            "How can a trade war affect supply chains?",
+            "How should I interpret the scenario results?",
+        ]
+        qcols = st.columns(2)
+        for i, default_question in enumerate(default_questions):
+            with qcols[i % 2]:
+                if st.button(default_question, use_container_width=True, key=f"tradewar-default-question-{i}"):
+                    st.session_state[input_key] = default_question
+                    st.rerun()
+
+        question = st.text_area(
                 "Ask a question",
                 key=input_key,
                 height=90,
