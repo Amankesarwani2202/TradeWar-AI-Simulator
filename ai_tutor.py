@@ -276,18 +276,6 @@ def render_global_chatbot():
                 st.session_state["tradewar_global_chat_clear_input"] = True
                 st.rerun()
 
-            # Show the conversation below the question controls so the latest
-            # answer appears underneath the text box rather than above it.
-            if st.session_state[history_key]:
-                st.divider()
-                for message in st.session_state[history_key]:
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["text"])
-                        if message.get("sources"):
-                            with st.expander("Sources"):
-                                for source in message["sources"]:
-                                    st.markdown(f"- [{source['title']}]({source['url']})")
-
             if ask:
                 question = question.strip()
                 if not question:
@@ -309,10 +297,24 @@ def render_global_chatbot():
                             "text": result["text"],
                             "sources": result.get("sources", []),
                         })
-                        # The text_area has already been instantiated in this run,
-                        # so clear it on the next run instead of mutating its key now.
+                        # Defer clearing the widget value until the next rerun.
+                        # Do not rerun here: keeping this run alive lets the newly
+                        # added question/answer render immediately in the popover.
                         st.session_state["tradewar_global_chat_clear_input"] = True
-                        st.rerun()
+
+            # Show the conversation below the question controls. Because the
+            # Ask action is processed before this block, the latest question and
+            # answer appear immediately in the same session/run.
+            if st.session_state[history_key]:
+                st.divider()
+                for message in st.session_state[history_key]:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["text"])
+                        if message.get("sources"):
+                            with st.expander("Sources"):
+                                for source in message["sources"]:
+                                    st.markdown(f"- [{source['title']}]({source['url']})")
+
 
 def render_ai_tutor(page, context=None, suggestions=None):
     context = dict(context or {})
