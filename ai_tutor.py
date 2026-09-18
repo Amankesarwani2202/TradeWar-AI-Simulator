@@ -9,8 +9,9 @@ KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
 
 # Gemini can occasionally return transient 5xx/429 errors during short demand spikes.
 # Keep retries local to the tutor so the rest of the app is unaffected.
-MAX_RETRIES = 3
-RETRY_DELAYS = (1.5, 3.0, 6.0)
+MAX_RETRIES = 2
+RETRY_DELAYS = (1.5, 3.0)
+FALLBACK_MODEL = "gemini-3.5-flash-lite"
 
 
 def _secret(name, default=None):
@@ -62,6 +63,14 @@ def ask_tutor(question, context=None):
     model = _secret("GEMINI_MODEL", "gemini-3.6-flash")
     context = context or {}
 
+    # Google Search grounding consumes additional quota. Only enable it for
+    # questions that explicitly need current/live information.
+    lowered_question = question.lower()
+    needs_web = any(marker in lowered_question for marker in (
+        "latest", "today", "current", "recent", "this week", "this month",
+        "news", "2026", "now", "as of", "updated",
+    ))
+
     system = """You are TradeWar AI, the general-purpose research assistant inside TradeWar AI Simulator.
 Answer questions related to international trade, tariffs, trade policy, economics, macroeconomics, financial markets, demographics, supply chains, historical trade shocks, and how the TradeWar AI Simulator works. For current or changing information, use Google Search grounding and cite useful sources. Prefer primary sources, official statistics, central banks, government agencies, international organizations, and reputable financial/news sources. Completely unrelated questions should be politely redirected back to the app topic.
 Never invent data, coefficients, market observations, or app capabilities. Treat the app's statistical/economic models as the source of quantitative results; AI is only an explanation layer.
@@ -85,18 +94,26 @@ QUESTION:
     client = genai.Client(api_key=key)
     last_error = None
 
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
+    models_to_try = [model]
+    if model != FALLBACK_MODEL:
+        models_to_try.append(FALLBACK_MODEL)
+
+    last_error = None
+    for model_index, active_model in enumerate(models_to_try):
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                config_kwargs = dict(
                     system_instruction=system,
-                    temperature=0.3,
-                    max_output_tokens=900,
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                ),
-            )
+                    max_output_tokens=700,
+                )
+                if needs_web:
+                    config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+
+                response = client.models.generate_content(
+                    model=active_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(**config_kwargs),
+                )
             text = getattr(response, "text", None)
             sources = []
             try:
@@ -114,8 +131,9 @@ QUESTION:
         except Exception as exc:
             last_error = exc
 
-            # Retry only transient availability/rate-limit errors.
-            # Auth, invalid model, bad request, etc. fail immediately.
+            # Retry only transient availability/rate-limit errors. If the
+            # configured model is rate-limited, the loop then tries the
+            # lower-cost Flash-Lite fallback before returning an error.
             if not _is_retryable_gemini_error(exc) or attempt >= MAX_RETRIES:
                 break
 
