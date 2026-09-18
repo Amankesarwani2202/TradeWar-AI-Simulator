@@ -198,21 +198,21 @@ def render_global_chatbot():
                                 st.markdown(f"- [{source['title']}]({source['url']})")
 
             st.markdown("**Try asking:**")
-        default_questions = [
-            "What happens to GDP when tariffs increase?",
-            "How do tariffs affect consumers and businesses?",
-            "What is the difference between a tariff and a quota?",
-            "How can a trade war affect supply chains?",
-            "How should I interpret the scenario results?",
-        ]
-        qcols = st.columns(2)
-        for i, default_question in enumerate(default_questions):
-            with qcols[i % 2]:
-                if st.button(default_question, use_container_width=True, key=f"tradewar-default-question-{i}"):
-                    st.session_state[input_key] = default_question
-                    st.rerun()
+            default_questions = [
+                "What happens to GDP when tariffs increase?",
+                "How do tariffs affect consumers and businesses?",
+                "What is the difference between a tariff and a quota?",
+                "How can a trade war affect supply chains?",
+                "How should I interpret the scenario results?",
+            ]
+            qcols = st.columns(2)
+            for i, default_question in enumerate(default_questions):
+                with qcols[i % 2]:
+                    if st.button(default_question, use_container_width=True, key=f"tradewar-default-question-{i}"):
+                        st.session_state[input_key] = default_question
+                        st.rerun()
 
-        question = st.text_area(
+            question = st.text_area(
                 "Ask a question",
                 key=input_key,
                 height=90,
