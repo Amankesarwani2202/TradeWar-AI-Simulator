@@ -11,7 +11,7 @@ KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
 # Keep retries local to the tutor so the rest of the app is unaffected.
 MAX_RETRIES = 2
 RETRY_DELAYS = (1.5, 3.0)
-FALLBACK_MODEL = "gemini-3.5-flash-lite"
+FALLBACK_MODEL = "gemini-2.5-flash-lite"
 
 
 def _secret(name, default=None):
@@ -99,11 +99,12 @@ QUESTION:
         models_to_try.append(FALLBACK_MODEL)
 
     last_error = None
-    for model_index, active_model in enumerate(models_to_try):
+    for active_model in models_to_try:
         for attempt in range(MAX_RETRIES + 1):
             try:
                 config_kwargs = dict(
                     system_instruction=system,
+                    temperature=0.3,
                     max_output_tokens=700,
                 )
                 if needs_web:
@@ -114,30 +115,25 @@ QUESTION:
                     contents=prompt,
                     config=types.GenerateContentConfig(**config_kwargs),
                 )
-            text = getattr(response, "text", None)
-            sources = []
-            try:
-                metadata = response.candidates[0].grounding_metadata
-                for chunk in getattr(metadata, "grounding_chunks", []) or []:
-                    web = getattr(chunk, "web", None)
-                    uri = getattr(web, "uri", None) if web else None
-                    title = getattr(web, "title", None) if web else None
-                    if uri and uri not in {item["url"] for item in sources}:
-                        sources.append({"title": title or uri, "url": uri})
-            except Exception:
+                text = getattr(response, "text", None)
                 sources = []
-            return {"text": text or "I received a response but could not extract the tutor text.", "sources": sources[:6]}, None
+                try:
+                    metadata = response.candidates[0].grounding_metadata
+                    for chunk in getattr(metadata, "grounding_chunks", []) or []:
+                        web = getattr(chunk, "web", None)
+                        uri = getattr(web, "uri", None) if web else None
+                        title = getattr(web, "title", None) if web else None
+                        if uri and uri not in {item["url"] for item in sources}:
+                            sources.append({"title": title or uri, "url": uri})
+                except Exception:
+                    sources = []
+                return {"text": text or "I received a response but could not extract the tutor text.", "sources": sources[:6]}, None
 
-        except Exception as exc:
-            last_error = exc
-
-            # Retry only transient availability/rate-limit errors. If the
-            # configured model is rate-limited, the loop then tries the
-            # lower-cost Flash-Lite fallback before returning an error.
-            if not _is_retryable_gemini_error(exc) or attempt >= MAX_RETRIES:
-                break
-
-            time.sleep(RETRY_DELAYS[attempt])
+            except Exception as exc:
+                last_error = exc
+                if not _is_retryable_gemini_error(exc) or attempt >= MAX_RETRIES:
+                    break
+                time.sleep(RETRY_DELAYS[attempt])
 
     message = str(last_error)
     lowered = message.lower()
@@ -146,7 +142,7 @@ QUESTION:
         return None, "The AI service is temporarily rate-limited. I retried automatically; please try again in a few seconds."
 
     if "503" in message or "unavailable" in lowered:
-        return None, "The AI service is temporarily busy. I retried automatically 3 times; please try again in a few seconds."
+        return None, "The AI service is temporarily busy. I retried automatically; please try again in a few seconds."
 
     if "api key" in lowered or "authentication" in lowered or "permission" in lowered:
         return None, "AI authentication failed. Check the configured API key in Streamlit Secrets."
