@@ -45,11 +45,25 @@ edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="h
 st.session_state["econ_df"] = prepare(edited)
 df = prepare(edited)
 
+year_range = []
+if "year" in df.columns and len(df):
+    years = pd.to_numeric(df["year"], errors="coerce").dropna()
+    if len(years):
+        year_range = [int(years.min()), int(years.max())]
+
+latest_exports = None
+if {"year", "exports_bn_usd"}.issubset(df.columns) and len(df):
+    ordered = df.copy()
+    ordered["year"] = pd.to_numeric(ordered["year"], errors="coerce")
+    ordered = ordered.dropna(subset=["year"]).sort_values("year")
+    if len(ordered):
+        latest_exports = float(ordered.iloc[-1]["exports_bn_usd"])
+
 render_ai_tutor("historical_data_lab", {
     "rows": len(df),
     "columns": list(df.columns),
-    "year_range": [int(df.year.min()), int(df.year.max())] if len(df) else [],
-    "latest_exports_bn_usd": float(df.sort_values("year").iloc[-1]["exports_bn_usd"]) if len(df) else None,
+    "year_range": year_range,
+    "latest_exports_bn_usd": latest_exports,
 }, [
     "What does my correlation matrix mean?",
     "Explain my tariff coefficient in simple terms.",
