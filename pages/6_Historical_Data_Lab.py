@@ -146,7 +146,7 @@ if predictors:
         fig = go.Figure()
         fig.add_trace(go.Scatter(y=pred_df["exports_bn_usd"], mode="lines+markers", name="Actual"))
         fig.add_trace(go.Scatter(y=pred_df["predicted"], mode="lines+markers", name="OLS predicted"))
-        fig.update_layout(title="Actual vs OLS predicted exports", xaxis_title="Observation", yaxis_title="Exports ($B)", yaxis=dict(automargin=True, tickmode="linear", dtick=0.5), margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
+        fig.update_layout(title="Actual vs OLS predicted exports", xaxis_title="Observation", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
         render_chart(fig, key="historical_model_chart")
     except Exception as exc:
         st.error(f"Model could not be estimated: {exc}")
