@@ -2,7 +2,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from utils import COUNTRY_PROFILES, inject_css
-from theme import apply_plotly_theme
+from theme import apply_plotly_theme, render_chart, make_line_figure
+from components.learning import render_learning_header, render_page_learning
 from market_data import MARKETS, download_history, summarize, live_timestamp
 
 inject_css()
@@ -16,6 +17,8 @@ labels = {f"{name} ({ticker})": (name, ticker, kind) for name, ticker, kind in o
 selected = st.sidebar.multiselect("Markets to compare", list(labels), default=list(labels)[:2], key="financial_markets")
 period = st.sidebar.selectbox("History", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=3, key="financial_period")
 
+render_learning_header("Financial markets", "Learn the market concepts behind the live data before interpreting a chart.")
+render_page_learning("financial")
 rows = []
 for label in selected:
     name, ticker, kind = labels[label]
@@ -60,7 +63,7 @@ if search.strip():
                 a.metric("Latest", f"{latest:,.2f}")
                 b.metric("Daily change", f"{(latest / previous - 1) * 100:+.2f}%")
                 c.metric("Period change", f"{(latest / float(close.iloc[0]) - 1) * 100:+.2f}%")
-                st.line_chart(close, use_container_width=True)
+                render_chart(make_line_figure([("Price", close)], title=f"{chosen} price history", yaxis_title="Price"), key="financial_custom_instrument")
 
 st.divider()
 st.subheader("📈 Live market vs. policy scenario")

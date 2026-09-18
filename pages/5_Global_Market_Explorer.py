@@ -1,7 +1,8 @@
 import pandas as pd
 import streamlit as st
 from market_data import MARKETS, COMMON_ASSETS, download_history, summarize, live_timestamp
-from theme import inject_css
+from theme import inject_css, render_chart, make_line_figure
+from components.learning import render_learning_header, render_page_learning
 
 st.set_page_config(page_title="Global Market Explorer", page_icon="🌐", layout="wide")
 inject_css()
@@ -17,6 +18,8 @@ market_options = MARKETS[country]
 market_labels = {f"{name} ({ticker})": (name, ticker, asset_type) for name, ticker, asset_type in market_options}
 selected_labels = st.multiselect("Indices / markets to compare", list(market_labels), default=list(market_labels)[:2])
 
+render_learning_header("Global markets", "Understand indices, currencies and cross-market comparisons before drawing conclusions.")
+render_page_learning("global")
 rows = []
 charts = []
 for label in selected_labels:
@@ -37,7 +40,7 @@ if rows:
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     for name, close in charts:
         st.subheader(name)
-        st.line_chart(close, use_container_width=True)
+        render_chart(make_line_figure([(name, close)], title=f"{name} — {period}", yaxis_title="Index / price"), key=f"global_{name}_{period}")
 else:
     st.info("Select one or more markets to load live data.")
 
@@ -70,4 +73,5 @@ if custom.strip():
             a.metric("Latest", f"{result['latest']:,.2f}")
             b.metric("Daily change", f"{result['daily_pct']:+.2f}%")
             c.metric("1Y change", f"{result['period_pct']:+.2f}%")
-        st.line_chart(pd.to_numeric(data["Close"], errors="coerce").dropna(), use_container_width=True)
+        custom_close = pd.to_numeric(data["Close"], errors="coerce").dropna()
+        render_chart(make_line_figure([(custom.strip(), custom_close)], title=f"{custom.strip()} — {custom_period}", yaxis_title="Price"), key="global_custom_ticker")

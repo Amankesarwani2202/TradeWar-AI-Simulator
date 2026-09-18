@@ -6,14 +6,18 @@ import plotly.graph_objects as go
 import statsmodels.api as sm
 from historical_analysis import (
     sample_data, prepare, validate_data, render_dataset_metrics, make_plot,
-    fit_ols, forecast_arima, elasticity_prediction, did_analysis,
+    fit_ols, forecast_arima, elasticity_prediction, did_analysis, hide_chart_colorbars,
 )
-from theme import inject_css, apply_plotly_theme
+from theme import inject_css, apply_plotly_theme, render_chart
+from components.learning import render_learning_header, render_page_learning
 
 inject_css()
 st.title("🔬 Historical Data & Economics Lab")
 st.markdown("Upload or enter real historical observations, test economic relationships, forecast exports, and generate research-ready results — without leaving the app.")
 st.info("**Research principle:** statistical/economic models generate the quantitative result. AI can be added later as an explanation layer; it should not be treated as the source of the underlying coefficient or prediction.")
+
+render_learning_header("Historical data & economics", "Learn the method first, then use your own observations to test an economic relationship.")
+render_page_learning("historical")
 
 with st.sidebar:
     st.header("📥 Data source")
@@ -40,6 +44,20 @@ edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="h
 st.session_state["econ_df"] = prepare(edited)
 df = prepare(edited)
 
+year_range = []
+if "year" in df.columns and len(df):
+    years = pd.to_numeric(df["year"], errors="coerce").dropna()
+    if len(years):
+        year_range = [int(years.min()), int(years.max())]
+
+latest_exports = None
+if {"year", "exports_bn_usd"}.issubset(df.columns) and len(df):
+    ordered = df.copy()
+    ordered["year"] = pd.to_numeric(ordered["year"], errors="coerce")
+    ordered = ordered.dropna(subset=["year"]).sort_values("year")
+    if len(ordered):
+        latest_exports = float(ordered.iloc[-1]["exports_bn_usd"])
+
 issues = validate_data(df)
 if issues:
     for issue in issues:
@@ -54,7 +72,7 @@ with c1:
 with c2:
     st.download_button("⬇️ Download sample template", sample_data().to_csv(index=False).encode("utf-8"), "trade_analysis_template.csv", "text/csv", use_container_width=True)
 
-st.plotly_chart(apply_plotly_theme(make_plot(df)), use_container_width=True)
+render_chart(make_plot(df), key="historical_primary_chart")
 
 st.divider()
 st.subheader("2. Descriptive statistics")
@@ -100,7 +118,7 @@ if len(df) >= 3:
         margin=dict(l=80, r=80, t=75, b=70),
         coloraxis_showscale=False,
     )
-    st.plotly_chart(apply_plotly_theme(correlation_fig), use_container_width=True)
+    render_chart(correlation_fig, key="historical_correlation")
 
 st.divider()
 st.subheader("3. Econometric model")
@@ -128,8 +146,9 @@ if predictors:
         fig = go.Figure()
         fig.add_trace(go.Scatter(y=pred_df["exports_bn_usd"], mode="lines+markers", name="Actual"))
         fig.add_trace(go.Scatter(y=pred_df["predicted"], mode="lines+markers", name="OLS predicted"))
-        fig.update_layout(title="Actual vs OLS predicted exports", xaxis_title="Observation", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
-        st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
+        fig.update_layout(title="Actual vs OLS predicted exports", xaxis_title="Observation", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), coloraxis_showscale=False, coloraxis=dict(showscale=False), coloraxis2=dict(showscale=False), coloraxis3=dict(showscale=False))
+        fig = hide_chart_colorbars(fig)
+        render_chart(fig, key="historical_model_chart")
     except Exception as exc:
         st.error(f"Model could not be estimated: {exc}")
 else:
@@ -160,8 +179,9 @@ try:
     fig.add_trace(go.Scatter(x=future_years, y=mean, mode="lines+markers", name="ARIMA forecast"))
     fig.add_trace(go.Scatter(x=future_years, y=ci.iloc[:, 1], mode="lines", line=dict(width=0), showlegend=False))
     fig.add_trace(go.Scatter(x=future_years, y=ci.iloc[:, 0], mode="lines", fill="tonexty", line=dict(width=0), name="95% interval"))
-    fig.update_layout(title="Export forecast", xaxis_title="Year", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
-    st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
+    fig.update_layout(title="Export forecast", xaxis_title="Year", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), coloraxis_showscale=False, coloraxis=dict(showscale=False), coloraxis2=dict(showscale=False), coloraxis3=dict(showscale=False))
+    fig = hide_chart_colorbars(fig)
+    render_chart(fig, key="historical_forecast_chart")
     st.dataframe(pd.DataFrame({"year": future_years, "forecast_exports_bn_usd": mean.values, "lower_95": ci.iloc[:,0].values, "upper_95": ci.iloc[:,1].values}), use_container_width=True)
 except Exception as exc:
     st.warning(f"ARIMA forecast unavailable: {exc}")

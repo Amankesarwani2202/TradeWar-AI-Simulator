@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
 import utils
+from ai_tutor import render_global_chatbot
 from beneficiary import build_country_scenario as continuous_build_country_scenario
 from theme import inject_css
 from utils import COUNTRY_PROFILES
@@ -190,4 +191,5 @@ pg = st.navigation({"": [st.Page(home, title="Home", icon="🏠", default=True)]
     st.Page("pages/5_Global_Market_Explorer.py", title="Global Market Explorer", icon="🌐"),
     st.Page("pages/4_Demographics.py", title="Demographics", icon="👥"),
 ]})
+render_global_chatbot()
 pg.run()

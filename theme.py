@@ -176,6 +176,35 @@ def apply_plotly_theme(fig: Figure) -> Figure:
     return fig
 
 
+
+def render_chart(fig, key=None, height=None):
+    """Render a Plotly chart through the single app-wide theme pipeline."""
+    fig = apply_plotly_theme(fig)
+    if height is not None:
+        fig.update_layout(height=height)
+    kwargs = {"use_container_width": True, "theme": None}
+    if key is not None:
+        kwargs["key"] = key
+    st.plotly_chart(fig, **kwargs)
+
+
+def make_line_figure(series_map, title="", yaxis_title="", height=420):
+    """Create a consistent responsive line chart from named pandas Series."""
+    import plotly.graph_objects as go
+    fig = go.Figure()
+    for name, series in series_map:
+        clean = series.dropna()
+        fig.add_trace(go.Scatter(
+            x=clean.index,
+            y=clean.values,
+            mode="lines",
+            name=name,
+            hovertemplate="%{x}<br>%{y:,.2f}<extra>" + str(name) + "</extra>",
+        ))
+    fig.update_layout(title=title, yaxis_title=yaxis_title, height=height, hovermode="x unified")
+    return apply_plotly_theme(fig)
+
+
 def patch_streamlit_plotly_chart():
     """Apply our figure theme and disable Streamlit's second chart theme layer."""
     if getattr(st, "_trade_war_plotly_theme_patched", False):
