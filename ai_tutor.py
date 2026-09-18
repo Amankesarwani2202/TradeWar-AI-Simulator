@@ -194,6 +194,11 @@ def render_global_chatbot():
     if history_key not in st.session_state:
         st.session_state[history_key] = []
 
+    # Streamlit locks a widget's session-state key once that widget is created.
+    # Apply deferred input changes before the text_area is instantiated.
+    if st.session_state.pop("tradewar_global_chat_clear_input", False):
+        st.session_state[input_key] = ""
+
     st.markdown(
         """
         <style>
@@ -275,7 +280,7 @@ def render_global_chatbot():
 
             if clear:
                 st.session_state[history_key] = []
-                st.session_state[input_key] = ""
+                st.session_state["tradewar_global_chat_clear_input"] = True
                 st.rerun()
 
             if ask:
@@ -299,7 +304,9 @@ def render_global_chatbot():
                             "text": result["text"],
                             "sources": result.get("sources", []),
                         })
-                        st.session_state[input_key] = ""
+                        # The text_area has already been instantiated in this run,
+                        # so clear it on the next run instead of mutating its key now.
+                        st.session_state["tradewar_global_chat_clear_input"] = True
                         st.rerun()
 
 def render_ai_tutor(page, context=None, suggestions=None):
