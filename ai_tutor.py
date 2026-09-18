@@ -1,10 +1,16 @@
 import json
 import os
+import time
 from pathlib import Path
 
 import streamlit as st
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
+
+# Gemini can occasionally return transient 5xx/429 errors during short demand spikes.
+# Keep retries local to the tutor so the rest of the app is unaffected.
+MAX_RETRIES = 3
+RETRY_DELAYS = (1.5, 3.0, 6.0)
 
 
 def _secret(name, default=None):
@@ -33,12 +39,27 @@ def _knowledge_text():
     return "\n\n".join(chunks)
 
 
+def _is_retryable_gemini_error(exc):
+    """Return True for transient Gemini availability/rate-limit errors."""
+    message = str(exc).lower()
+    return any(marker in message for marker in (
+        "503",
+        "unavailable",
+        "429",
+        "rate limit",
+        "too many requests",
+        "500 internal",
+        "502 bad gateway",
+        "504 gateway",
+    ))
+
+
 def ask_tutor(question, context=None):
     key = _secret("GEMINI_API_KEY")
     if not key:
         return None, "AI Tutor is not configured yet. Add GEMINI_API_KEY to Streamlit secrets to enable it."
 
-    model = _secret("GEMINI_MODEL", "gemini-2.5-flash")
+    model = _secret("GEMINI_MODEL", "gemini-3.6-flash")
     context = context or {}
 
     system = """You are TradeWar AI Tutor, an economics teacher and application guide inside TradeWar AI Simulator.
@@ -58,32 +79,52 @@ KNOWLEDGE:
 QUESTION:
 {question}"""
 
-    try:
-        from google import genai
-        from google.genai import types
+    from google import genai
+    from google.genai import types
 
-        client = genai.Client(api_key=key)
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system,
-                temperature=0.3,
-                max_output_tokens=900,
-            ),
-        )
-        text = getattr(response, "text", None)
-        return text or "I received a response but could not extract the tutor text.", None
-    except Exception as exc:
-        message = str(exc)
-        lowered = message.lower()
-        if "429" in message or "quota" in lowered or "rate limit" in lowered:
-            return None, "The Gemini free-tier quota/rate limit has been reached. Please try again later."
-        if "api key" in lowered or "authentication" in lowered or "permission" in lowered:
-            return None, "Gemini authentication failed. Check the GEMINI_API_KEY in Streamlit secrets."
-        if "not found" in lowered or ("model" in lowered and "not found" in lowered):
-            return None, f"Gemini model '{model}' was not found. Check GEMINI_MODEL in Streamlit secrets."
-        return None, f"The Gemini AI Tutor encountered an error: {message}"
+    client = genai.Client(api_key=key)
+    last_error = None
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    temperature=0.3,
+                    max_output_tokens=900,
+                ),
+            )
+            text = getattr(response, "text", None)
+            return text or "I received a response but could not extract the tutor text.", None
+
+        except Exception as exc:
+            last_error = exc
+
+            # Retry only transient availability/rate-limit errors.
+            # Auth, invalid model, bad request, etc. fail immediately.
+            if not _is_retryable_gemini_error(exc) or attempt >= MAX_RETRIES:
+                break
+
+            time.sleep(RETRY_DELAYS[attempt])
+
+    message = str(last_error)
+    lowered = message.lower()
+
+    if "429" in message or "quota" in lowered or "rate limit" in lowered:
+        return None, "Gemini is temporarily rate-limited. I retried automatically; please try again in a few seconds."
+
+    if "503" in message or "unavailable" in lowered:
+        return None, "Gemini is temporarily busy. I retried automatically 3 times; please try again in a few seconds."
+
+    if "api key" in lowered or "authentication" in lowered or "permission" in lowered:
+        return None, "Gemini authentication failed. Check the GEMINI_API_KEY in Streamlit secrets."
+
+    if "not found" in lowered or ("model" in lowered and "not found" in lowered):
+        return None, f"Gemini model '{model}' was not found. Check GEMINI_MODEL in Streamlit secrets."
+
+    return None, f"The Gemini AI Tutor encountered an error: {message}"
 
 
 def render_ai_tutor(page, context=None, suggestions=None):
