@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
 import utils
+from ai_tutor import render_global_chatbot
 from beneficiary import build_country_scenario as continuous_build_country_scenario
 from theme import inject_css
 from utils import COUNTRY_PROFILES
@@ -163,6 +164,7 @@ def home():
     inject_css()
     st.sidebar.caption("🌗 **Theme:** use ⋮ → Settings → Theme to switch between the configured light and dark themes.")
     st.sidebar.caption(f"🌐 Macro data refresh: {live_timestamp()}")
+    render_global_chatbot()
 
     st.markdown("""<div style="padding:2rem 0 1.5rem;border-bottom:1px solid var(--st-border-color);margin-bottom:2rem"><h1>🌏 TradeWar AI Simulator</h1><p style="max-width:720px;line-height:1.65">Explore how tariffs and trade shocks reshape supply chains, financial markets and demographics. Macro, demographic, FX and market inputs are refreshed from live public sources where available.</p></div>""", unsafe_allow_html=True)
     render_visitor_counter()
