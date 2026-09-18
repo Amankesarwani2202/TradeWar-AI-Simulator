@@ -2,7 +2,6 @@ import json
 import os
 from pathlib import Path
 
-import requests
 import streamlit as st
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
@@ -19,7 +18,7 @@ def _secret(name, default=None):
 
 
 def ai_configured():
-    return bool(_secret("OPENAI_API_KEY"))
+    return bool(_secret("GEMINI_API_KEY"))
 
 
 def _knowledge_text():
@@ -34,49 +33,54 @@ def _knowledge_text():
 
 
 def ask_tutor(question, context=None):
-    key = _secret("OPENAI_API_KEY")
+    key = _secret("GEMINI_API_KEY")
     if not key:
-        return None, "AI Tutor is not configured yet. Add OPENAI_API_KEY to Streamlit secrets to enable it."
-    model = _secret("OPENAI_MODEL", "gpt-5.6-luna")
-    endpoint = _secret("OPENAI_RESPONSES_URL", "https://api.openai.com/v1/responses")
+        return None, "AI Tutor is not configured yet. Add GEMINI_API_KEY to Streamlit secrets to enable it."
+
+    model = _secret("GEMINI_MODEL", "gemini-3.8-flash")
     context = context or {}
+
     system = """You are TradeWar AI Tutor, an economics teacher and application guide inside TradeWar AI Simulator.
 Explain economics in clear language suitable for students and researchers. Help users understand what the app is doing and how to use it.
 Never invent data, coefficients, market observations, or app capabilities. Treat the app's statistical/economic models as the source of quantitative results; AI is only an explanation layer.
 Distinguish observed data, model estimates, assumptions, scenarios and forecasts. Explain correlation versus causation and uncertainty when relevant.
 Do not give personalized investment advice. If asked for an investment recommendation, explain the relevant concepts and limitations instead.
+If the user asks about a value produced by the app, use the supplied APP CONTEXT and explain what that value means; do not fabricate missing values.
 """
-    payload = {
-        "model": model,
-        "input": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": f"APP CONTEXT:\n{json.dumps(context, default=str, indent=2)}\n\nKNOWLEDGE:\n{_knowledge_text()}\n\nQUESTION:\n{question}"},
-        ],
-        "max_output_tokens": 900,
-    }
+
+    prompt = f"""APP CONTEXT:
+{json.dumps(context, default=str, indent=2)}
+
+KNOWLEDGE:
+{_knowledge_text()}
+
+QUESTION:
+{question}"""
+
     try:
-        response = requests.post(
-            endpoint,
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=45,
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=key)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                temperature=0.3,
+                max_output_tokens=900,
+            ),
         )
-        response.raise_for_status()
-        data = response.json()
-        text = data.get("output_text")
-        if not text:
-            for item in data.get("output", []):
-                for content in item.get("content", []):
-                    if content.get("type") in {"output_text", "text"} and content.get("text"):
-                        text = content["text"]
-                        break
-                if text:
-                    break
+        text = getattr(response, "text", None)
         return text or "I received a response but could not extract the tutor text.", None
-    except requests.RequestException as exc:
-        return None, f"The AI Tutor could not reach the configured provider: {exc}"
     except Exception as exc:
-        return None, f"The AI Tutor encountered an unexpected error: {exc}"
+        message = str(exc)
+        lowered = message.lower()
+        if "429" in message or "quota" in lowered or "rate limit" in lowered:
+            return None, "The Gemini free-tier quota/rate limit has been reached. Please try again later."
+        if "api key" in lowered or "authentication" in lowered or "permission" in lowered:
+            return None, "Gemini authentication failed. Check the GEMINI_API_KEY in Streamlit secrets."
+        return None, f"The Gemini AI Tutor encountered an error: {message}"
 
 
 def render_ai_tutor(page, context=None, suggestions=None):
@@ -90,11 +94,16 @@ def render_ai_tutor(page, context=None, suggestions=None):
     with st.sidebar.expander("🤖 TradeWar AI Tutor", expanded=False):
         st.caption("Economics tutor + app guide. AI explains results; the app's models calculate them.")
         if not ai_configured():
-            st.info("Tutor is ready in the UI but disabled until OPENAI_API_KEY is added to Streamlit secrets.")
+            st.info("Tutor is ready in the UI but disabled until GEMINI_API_KEY is added to Streamlit secrets.")
         for i, suggestion in enumerate(suggestions[:3]):
             if st.button(suggestion, key=f"tutor_suggestion_{page}_{i}", use_container_width=True):
                 st.session_state["tutor_question"] = suggestion
-        question = st.text_area("Ask a question", value=st.session_state.pop("tutor_question", ""), height=90, placeholder="e.g. What does this coefficient mean?")
+        question = st.text_area(
+            "Ask a question",
+            value=st.session_state.pop("tutor_question", ""),
+            height=90,
+            placeholder="e.g. What does this coefficient mean?",
+        )
         if st.button("Ask Tutor", type="primary", use_container_width=True) and question.strip():
             with st.spinner("Tutor is thinking…"):
                 answer, error = ask_tutor(question.strip(), context)
