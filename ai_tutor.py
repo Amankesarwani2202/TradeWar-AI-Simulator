@@ -7,11 +7,13 @@ import streamlit as st
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
 
-# Gemini can occasionally return transient 5xx/429 errors during short demand spikes.
-# Keep retries local to the tutor so the rest of the app is unaffected.
-MAX_RETRIES = 2
-RETRY_DELAYS = (1.5, 3.0)
-FALLBACK_MODEL = "gemini-2.5-flash-lite"
+# Free-tier friendly defaults. Quota is project-level, so retrying 429s or
+# switching models does not bypass an exhausted project quota.
+MAX_RETRIES = 1
+RETRY_DELAYS = (2.0,)
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
+MAX_KNOWLEDGE_CHARS = 8000
+MAX_OUTPUT_TOKENS = 450
 
 
 def _secret(name, default=None):
@@ -28,30 +30,55 @@ def ai_configured():
     return bool(_secret("GEMINI_API_KEY"))
 
 
-def _knowledge_text():
+def _knowledge_text(question=""):
+    """Return a small relevant knowledge slice to reduce Free Tier token usage."""
+    if not KNOWLEDGE_DIR.exists():
+        return ""
+
+    question_words = {
+        word.strip(".,?!:;()[]{}").lower()
+        for word in question.split()
+        if len(word.strip(".,?!:;()[]{}")) >= 4
+    }
+    candidates = []
+
+    for path in sorted(KNOWLEDGE_DIR.glob("*.md")):
+        try:
+            content = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        haystack = f"{path.stem} {content}".lower()
+        score = sum(1 for word in question_words if word in haystack)
+        candidates.append((score, path.name, content))
+
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+
     chunks = []
-    if KNOWLEDGE_DIR.exists():
-        for path in sorted(KNOWLEDGE_DIR.glob("*.md")):
-            try:
-                content = path.read_text(encoding="utf-8")[:7000]
-                chunks.append(f"## {path.stem}\n{content}")
-            except Exception:
-                continue
+    remaining = MAX_KNOWLEDGE_CHARS
+    for _, _, content in candidates:
+        if remaining <= 0:
+            break
+        excerpt = content[:remaining]
+        chunks.append(excerpt)
+        remaining -= len(excerpt)
+
     return "\n\n".join(chunks)
 
 
-def _is_retryable_gemini_error(exc):
-    """Return True for transient Gemini availability/rate-limit errors."""
+def _is_quota_error(exc):
     message = str(exc).lower()
     return any(marker in message for marker in (
-        "503",
-        "unavailable",
-        "429",
-        "rate limit",
-        "too many requests",
-        "500 internal",
-        "502 bad gateway",
-        "504 gateway",
+        "429", "resource_exhausted", "quota", "rate limit",
+        "too many requests", "requests per minute", "requests per day",
+        "tokens per minute",
+    ))
+
+
+def _is_transient_error(exc):
+    message = str(exc).lower()
+    return any(marker in message for marker in (
+        "503", "unavailable", "500 internal", "502 bad gateway", "504 gateway",
     ))
 
 
@@ -60,7 +87,7 @@ def ask_tutor(question, context=None):
     if not key:
         return None, "AI Tutor is not configured yet. Add GEMINI_API_KEY to Streamlit secrets to enable it."
 
-    model = _secret("GEMINI_MODEL", "gemini-3.6-flash")
+    model = _secret("GEMINI_MODEL", DEFAULT_MODEL)
     context = context or {}
 
     # Google Search grounding consumes additional quota. Only enable it for
@@ -83,7 +110,7 @@ If the user asks about a value produced by the app, use the supplied APP CONTEXT
 {json.dumps(context, default=str, indent=2)}
 
 KNOWLEDGE:
-{_knowledge_text()}
+{_knowledge_text(question)}
 
 QUESTION:
 {question}"""
@@ -94,55 +121,61 @@ QUESTION:
     client = genai.Client(api_key=key)
     last_error = None
 
-    models_to_try = [model]
-    if model != FALLBACK_MODEL:
-        models_to_try.append(FALLBACK_MODEL)
-
     last_error = None
-    for active_model in models_to_try:
-        for attempt in range(MAX_RETRIES + 1):
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            config_kwargs = dict(
+                system_instruction=system,
+                temperature=0.3,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+            )
+            if needs_web:
+                config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(**config_kwargs),
+            )
+            text = getattr(response, "text", None)
+            sources = []
             try:
-                config_kwargs = dict(
-                    system_instruction=system,
-                    temperature=0.3,
-                    max_output_tokens=700,
-                )
-                if needs_web:
-                    config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
-
-                response = client.models.generate_content(
-                    model=active_model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(**config_kwargs),
-                )
-                text = getattr(response, "text", None)
+                metadata = response.candidates[0].grounding_metadata
+                for chunk in getattr(metadata, "grounding_chunks", []) or []:
+                    web = getattr(chunk, "web", None)
+                    uri = getattr(web, "uri", None) if web else None
+                    title = getattr(web, "title", None) if web else None
+                    if uri and uri not in {item["url"] for item in sources}:
+                        sources.append({"title": title or uri, "url": uri})
+            except Exception:
                 sources = []
-                try:
-                    metadata = response.candidates[0].grounding_metadata
-                    for chunk in getattr(metadata, "grounding_chunks", []) or []:
-                        web = getattr(chunk, "web", None)
-                        uri = getattr(web, "uri", None) if web else None
-                        title = getattr(web, "title", None) if web else None
-                        if uri and uri not in {item["url"] for item in sources}:
-                            sources.append({"title": title or uri, "url": uri})
-                except Exception:
-                    sources = []
-                return {"text": text or "I received a response but could not extract the tutor text.", "sources": sources[:6]}, None
+            return {"text": text or "I received a response but could not extract the tutor text.", "sources": sources[:6]}, None
 
-            except Exception as exc:
-                last_error = exc
-                if not _is_retryable_gemini_error(exc) or attempt >= MAX_RETRIES:
-                    break
-                time.sleep(RETRY_DELAYS[attempt])
+        except Exception as exc:
+            last_error = exc
+
+            # A quota 429 is a hard project-level limit. Retrying or switching
+            # models would only consume more requests, so fail immediately.
+            if _is_quota_error(exc):
+                break
+
+            if not _is_transient_error(exc) or attempt >= MAX_RETRIES:
+                break
+
+            time.sleep(RETRY_DELAYS[attempt])
 
     message = str(last_error)
     lowered = message.lower()
 
-    if "429" in message or "quota" in lowered or "rate limit" in lowered:
-        return None, "The AI service is temporarily rate-limited. I retried automatically; please try again in a few seconds."
+    if _is_quota_error(last_error):
+        return None, (
+            "Gemini Free Tier quota has been reached for this project. "
+            "The chatbot is working, but Google is currently rejecting API requests. "
+            "Wait for the quota window to reset, or use a project/model with available Free Tier quota."
+        )
 
-    if "503" in message or "unavailable" in lowered:
-        return None, "The AI service is temporarily busy. I retried automatically; please try again in a few seconds."
+    if _is_transient_error(last_error):
+        return None, "Gemini is temporarily unavailable. Please try again in a few seconds."
 
     if "api key" in lowered or "authentication" in lowered or "permission" in lowered:
         return None, "AI authentication failed. Check the configured API key in Streamlit Secrets."
@@ -150,7 +183,7 @@ QUESTION:
     if "not found" in lowered or ("model" in lowered and "not found" in lowered):
         return None, "The configured AI model was not found. Check the model setting in Streamlit Secrets."
 
-    return None, f"The TradeWar AI assistant encountered an error: {message}"
+    return None, "The TradeWar AI assistant encountered an unexpected Gemini API error. Please check the Gemini API project settings."
 
 
 def render_global_chatbot():
