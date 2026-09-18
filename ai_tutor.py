@@ -26,7 +26,8 @@ def _knowledge_text():
     if KNOWLEDGE_DIR.exists():
         for path in sorted(KNOWLEDGE_DIR.glob("*.md")):
             try:
-                chunks.append(f"## {path.stem}\n{path.read_text(encoding="utf-8")[:7000]}")
+                content = path.read_text(encoding="utf-8")[:7000]
+                chunks.append(f"## {path.stem}\n{content}")
             except Exception:
                 continue
     return "\n\n".join(chunks)
@@ -80,7 +81,7 @@ QUESTION:
             return None, "The Gemini free-tier quota/rate limit has been reached. Please try again later."
         if "api key" in lowered or "authentication" in lowered or "permission" in lowered:
             return None, "Gemini authentication failed. Check the GEMINI_API_KEY in Streamlit secrets."
-        if "not found" in lowered or "model" in lowered and "not found" in lowered:
+        if "not found" in lowered or ("model" in lowered and "not found" in lowered):
             return None, f"Gemini model '{model}' was not found. Check GEMINI_MODEL in Streamlit secrets."
         return None, f"The Gemini AI Tutor encountered an error: {message}"
 
