@@ -2,13 +2,22 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from utils import COUNTRY_PROFILES, inject_css
-from theme import apply_plotly_theme
+from theme import apply_plotly_theme, render_chart, make_line_figure
+from components.learning import render_learning_header, render_page_learning
+from ai_tutor import render_ai_tutor
 from market_data import MARKETS, download_history, summarize, live_timestamp
 
 inject_css()
 st.title("💹 Financial Markets")
 st.caption("Live observed market data is kept separate from modelled trade-policy scenarios.")
 st.caption(f"Market refresh: {live_timestamp()} · Yahoo Finance is used for supported markets; Bangladesh DSE data uses the DSE adapter. Availability can vary by exchange/provider.")
+render_learning_header("Financial markets", "Learn the market concepts behind the live data before interpreting a chart.")
+render_page_learning("financial")
+render_ai_tutor("financial_markets", {"country": country, "selected_markets": selected, "period": period}, [
+    "What is a market index?",
+    "What does volatility mean?",
+    "How can tariffs affect financial markets?",
+])
 
 country = st.sidebar.selectbox("Country / market", list(MARKETS), key="financial_country")
 options = MARKETS[country]
@@ -60,7 +69,7 @@ if search.strip():
                 a.metric("Latest", f"{latest:,.2f}")
                 b.metric("Daily change", f"{(latest / previous - 1) * 100:+.2f}%")
                 c.metric("Period change", f"{(latest / float(close.iloc[0]) - 1) * 100:+.2f}%")
-                st.line_chart(close, use_container_width=True)
+                render_chart(make_line_figure([("Price", close)], title=f"{chosen} price history", yaxis_title="Price"), key="financial_custom_instrument")
 
 st.divider()
 st.subheader("📈 Live market vs. policy scenario")
