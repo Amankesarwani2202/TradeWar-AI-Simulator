@@ -105,6 +105,21 @@ def model_metrics(actual, predicted):
     return {"MAE": float(mean_absolute_error(actual, predicted)), "RMSE": rmse, "MAPE": mape, "R²": float(r2_score(actual, predicted))}
 
 
+
+def _linear_tick_values(values, count=5):
+    """Return evenly spaced, ascending axis ticks with at most 2 decimals."""
+    numeric = pd.to_numeric(pd.Series(values), errors="coerce").dropna()
+    if numeric.empty:
+        return [], []
+    value_min = float(numeric.min())
+    value_max = float(numeric.max())
+    if value_min == value_max:
+        tick_values = [round(value_min, 2)]
+    else:
+        tick_values = np.round(np.linspace(value_min, value_max, count), 2).tolist()
+    tick_text = [f"{value:.2f}".rstrip("0").rstrip(".") for value in tick_values]
+    return tick_values, tick_text
+
 def make_plot(df, title="Historical exports and tariffs"):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -115,11 +130,13 @@ def make_plot(df, title="Historical exports and tariffs"):
         x=df.year, y=df.tariff_pct, mode="lines+markers", name="Tariff (%)",
         yaxis="y2", hovertemplate="Year: %{x}<br>Tariff: %{y:.2f}%<extra></extra>"
     ))
+    export_ticks, export_ticktext = _linear_tick_values(df["exports_bn_usd"])
+    tariff_ticks, tariff_ticktext = _linear_tick_values(df["tariff_pct"])
     fig.update_layout(
         title=title,
         xaxis=dict(title="Year", automargin=True, tickmode="auto", nticks=8),
-        yaxis=dict(title="Exports ($B)", automargin=True),
-        yaxis2=dict(title="Tariff (%)", overlaying="y", side="right", automargin=True),
+        yaxis=dict(title="Exports ($B)", automargin=True, tickmode="array", tickvals=export_ticks, ticktext=export_ticktext),
+        yaxis2=dict(title="Tariff (%)", overlaying="y", side="right", automargin=True, tickmode="array", tickvals=tariff_ticks, ticktext=tariff_ticktext),
         hovermode="x unified",
         margin=dict(l=70, r=90, t=75, b=65),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
