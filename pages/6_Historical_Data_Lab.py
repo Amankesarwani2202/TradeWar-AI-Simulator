@@ -146,7 +146,7 @@ if predictors:
         fig = go.Figure()
         fig.add_trace(go.Scatter(y=pred_df["exports_bn_usd"], mode="lines+markers", name="Actual"))
         fig.add_trace(go.Scatter(y=pred_df["predicted"], mode="lines+markers", name="OLS predicted"))
-        fig.update_layout(title="Actual vs OLS predicted exports", xaxis_title="Observation", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), coloraxis_showscale=False)
+        fig.update_layout(title="Actual vs OLS predicted exports", xaxis_title="Observation", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), coloraxis_showscale=False, coloraxis=dict(showscale=False))
         fig = hide_chart_colorbars(fig)
         render_chart(fig, key="historical_model_chart")
     except Exception as exc:
@@ -179,7 +179,7 @@ try:
     fig.add_trace(go.Scatter(x=future_years, y=mean, mode="lines+markers", name="ARIMA forecast"))
     fig.add_trace(go.Scatter(x=future_years, y=ci.iloc[:, 1], mode="lines", line=dict(width=0), showlegend=False))
     fig.add_trace(go.Scatter(x=future_years, y=ci.iloc[:, 0], mode="lines", fill="tonexty", line=dict(width=0), name="95% interval"))
-    fig.update_layout(title="Export forecast", xaxis_title="Year", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), coloraxis_showscale=False)
+    fig.update_layout(title="Export forecast", xaxis_title="Year", yaxis_title="Exports ($B)", margin=dict(l=70, r=70, t=75, b=65), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), coloraxis_showscale=False, coloraxis=dict(showscale=False))
     fig = hide_chart_colorbars(fig)
     render_chart(fig, key="historical_forecast_chart")
     st.dataframe(pd.DataFrame({"year": future_years, "forecast_exports_bn_usd": mean.values, "lower_95": ci.iloc[:,0].values, "upper_95": ci.iloc[:,1].values}), use_container_width=True)
